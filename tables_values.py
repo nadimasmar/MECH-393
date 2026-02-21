@@ -1,8 +1,31 @@
-material = {
-    
+nu_steel_alloy, E_steel_alloy, G_steel_alloy, rho_steel_alloy = 0.28, 206.8, 80.8, 7800
+
+steel_carbon = {
+    # Standard notation as (Sy, Sut, HB, ν, E, G, ρ)
+    "cold rolled" : {
+        1010 : (303, 365, 105, nu_steel_alloy, E_steel_alloy, G_steel_alloy, rho_steel_alloy),
+        1020 : (393, 469, 131, nu_steel_alloy, E_steel_alloy, G_steel_alloy, rho_steel_alloy),
+        1030 : (441, 524, 149, nu_steel_alloy, E_steel_alloy, G_steel_alloy, rho_steel_alloy),
+        1035 : (462, 552, 163, nu_steel_alloy, E_steel_alloy, G_steel_alloy, rho_steel_alloy),
+        1040 : (490, 586, 170, nu_steel_alloy, E_steel_alloy, G_steel_alloy, rho_steel_alloy),
+        1045 : (531, 627, 179, nu_steel_alloy, E_steel_alloy, G_steel_alloy, rho_steel_alloy),
+        1050 : (579, 689, 197, nu_steel_alloy, E_steel_alloy, G_steel_alloy, rho_steel_alloy),
+    }
 }
 
-Kt_shoulder_fillet_tension = {
+steel_alloy = {
+    # Standard notation as (Sy, Sut, HB, ν, E, G, ρ)
+    "annealed" : {
+        1340 : (434, 703, 204, nu_steel_alloy, E_steel_alloy, G_steel_alloy, rho_steel_alloy),
+        4027 : (324, 517, 150, nu_steel_alloy, E_steel_alloy, G_steel_alloy, rho_steel_alloy),
+        4130 : (359, 558, 156, nu_steel_alloy, E_steel_alloy, G_steel_alloy, rho_steel_alloy),
+        4140 : (421, 655, 197, nu_steel_alloy, E_steel_alloy, G_steel_alloy, rho_steel_alloy),
+        6150 : (407, 662, 192, nu_steel_alloy, E_steel_alloy, G_steel_alloy, rho_steel_alloy),
+        8740 : (414, 665, 190, nu_steel_alloy, E_steel_alloy, G_steel_alloy, rho_steel_alloy),
+    }
+}
+
+kt_shoulder_fillet_tension = {
     2.00 : (1.01470, -0.30035),
     1.50 : (0.99957, -0.28221),
     1.30 : (0.99682, -0.25751),
@@ -15,7 +38,7 @@ Kt_shoulder_fillet_tension = {
     1.01 : (0.98413, -0.10474),
 }
 
-Kt_shoulder_fillet_bending = {
+kt_shoulder_fillet_bending = {
     6.00 : (0.87868, -0.33243),
     3.00 : (0.89334, -0.30860),
     2.00 : (0.90879, -0.28598),
@@ -29,7 +52,7 @@ Kt_shoulder_fillet_bending = {
     1.01 : (0.91938, -0.17032)
 }
 
-Kt_shoulder_fillet_torsion = {
+kt_shoulder_fillet_torsion = {
     2.00 : (0.86331, -0.23865),
     1.33 : (0.84897, -0.23161),
     1.20 : (0.83425, -0.21649),
@@ -244,19 +267,136 @@ std_wdrf_key_inch = {
 }
 # to do later
 
-face_factor = {
-    "imperial" : {
-        2  : 1.6,
-        6  : 1.7,
-        9  : 1.8,
-        20 : 2.0
-    },
+gear_quality = {
+    # from tables 12-6 and 12-7 in the textbook. Keys are applications or pitch line velocities
+    "cement mixer" : (3,5),
+    "cement kiln" : (5,6),
+    "steel mill drive" : (5,6),
+    "crane" : (5,7),
+    "punch press" : (5,7),
+    "conveyor" : (5,7),
+    "packager" : (6,8),
+    "power drill" : (7,9),
+    "washing machine" : (8,10),
+    "printing press" : (9,11),
+    "automotive" : (10,11),
+    "marine" : (10,12),
+    "aircraft" : (10,13),
+    "gyroscope" : (12,14),
 
-    "metric" : {
-        50  : 1.6,
-        150 : 1.7,
-        250 : 1.8,
-        500 : 2.0
+    0    : (6,8),
+    800  : (8,10),
+    2000 : (10,12),
+    4000 : (12,14)
+}
+
+face_factor = {
+    # 
+    50  : 1.6,
+    150 : 1.7,
+    250 : 1.8,
+    500 : 2.0
+}
+
+J_table_20degrees = {
+    (21, 21): (0.33, 0.33),
+    (21, 26): (0.33, 0.35),
+    (21, 35): (0.34, 0.37),
+    (21, 55): (0.34, 0.40),
+    (21, 135): (0.35, 0.43),
+
+    (26, 26): (0.35, 0.35),
+    (26, 35): (0.36, 0.38),
+    (26, 55): (0.37, 0.41),
+    (26, 135): (0.38, 0.44),
+
+    (35, 35): (0.39, 0.39),
+    (35, 55): (0.40, 0.42),
+    (35, 135): (0.41, 0.45),
+
+    (55, 55): (0.43, 0.43),
+    (55, 135): (0.45, 0.47),
+
+    (135, 135): (0.49, 0.49),
+}
+
+J_table_25degrees = {
+    (14, 14): (0.33, 0.33),
+    (14, 17): (0.33, 0.36),
+    (14, 21): (0.33, 0.39),
+    (14, 26): (0.33, 0.41),
+    (14, 35): (0.34, 0.44),
+    (14, 55): (0.34, 0.47),
+    (14, 135): (0.35, 0.51),
+
+    (17, 17): (0.36, 0.36),
+    (17, 21): (0.36, 0.39),
+    (17, 26): (0.37, 0.42),
+    (17, 35): (0.37, 0.45),
+    (17, 55): (0.38, 0.48),
+    (17, 135): (0.38, 0.52),
+
+    (21, 21): (0.39, 0.39),
+    (21, 26): (0.40, 0.42),
+    (21, 35): (0.40, 0.45),
+    (21, 55): (0.41, 0.49),
+    (21, 135): (0.42, 0.53),
+
+    (26, 26): (0.43, 0.43),
+    (26, 35): (0.43, 0.46),
+    (26, 55): (0.44, 0.49),
+    (26, 135): (0.45, 0.53),
+
+    (35, 35): (0.46, 0.46),
+    (35, 55): (0.47, 0.50),
+    (35, 135): (0.48, 0.54),
+
+    (55, 55): (0.51, 0.51),
+    (55, 135): (0.53, 0.56),
+
+    (135, 135): (0.57, 0.57),
+}
+
+load_distribution_factor = {
+    50  : 1.6,
+    150 : 1.7,
+    250 : 1.8,
+    500 : 2.0
+}
+
+application_factor = {
+    "uniform" : {
+        "uniform"        : 1.00,
+        "moderate shock" : 1.25,
+        "heavy shock"    : 1.75
+    },
+    "light shock" : {
+        "uniform"        : 1.25,
+        "moderate shock" : 1.50,
+        "heavy shock"    : 2.00
+    },
+    "medium shock" : {
+        "uniform"        : 1.50,
+        "moderate shock" : 1.75,
+        "heavy shock"    : 2.25
     }
 }
 
+size_factor = 1 # as specified in class
+
+rim_thickness_factor = {
+    0 : None,
+    0.5 : (-2,3.4),
+    1.2 : (0,1.0)
+}
+
+life_factor = {
+    # need to figure this out later
+}
+
+reliability_factor = {
+    90    : 0.85,
+    99    : 1.00,
+    99.9  : 1.25,
+    99.99 : 1.50
+}
