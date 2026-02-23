@@ -22,7 +22,7 @@ class Gear:
         return tangential_force * np.tan(np.radians(self.pressure_angle))
     
     @staticmethod
-    def calc_bending_strength_factor(gear: "Gear", pinion: "Gear") -> tuple:
+    def calc_bending_strength_factor(gear: "Gear", pinion: "Gear") -> dict:
         # Assuming Full-Depth Teeth with HPSTC Loading
 
         if not isinstance(gear, Gear) or not isinstance(pinion, Gear):
