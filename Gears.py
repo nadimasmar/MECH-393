@@ -2,8 +2,7 @@ import math
 import numpy as np
 import matplotlib.pyplot as plt
 from tables_values import J_table_20degrees, J_table_25degrees
-def get_face_widthFactor():
-    pass
+
 '''
 externally calculated for now: velocity ratio mV, gear ratio mG, angvel, etc.
 '''    
@@ -180,8 +179,8 @@ class gear:
     
     def Sfc(self):
         pass
-    
-    def perturbed_pressure_angle():
+
+    def get_face_widthFactor():
         pass
     
     @staticmethod
@@ -236,3 +235,4 @@ for i in range(5):
     gear1.self_autofill_values()
     gear1.info()
 '''
+
