@@ -1,6 +1,7 @@
+from shaft_tables import *
 from tables_values import *
 
-class Shaft():
+class Shaft:
     """By default, the shaft will be initialized as a steel shaft. These values will be input later."""
     def __init__(self, length, stresses, material):
         self.Sy, self.Sut, self.HB, self.nu, self.E, self.G, self.rho = material # perhaps read a dictionary of stress values to input a material
