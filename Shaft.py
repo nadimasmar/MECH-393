@@ -1,17 +1,61 @@
 from shaft_tables import *
 from tables_values import *
+import numpy as np
 
+def interpolate_table_value(table: dict, table_key: float):
+    """Interpolates between the values stored in a dictionary, given that the values are of num type.
+    Assumes the keys are decreasing, such that the first key is of the lowest numerical value
+
+    Args:
+        table (dict): _description_
+        table_key (float): _description_
+    """
+    error_message = f"The input table_key is not within the bounds of the dictionary keys, being {selection[0]} and {selection[-1]}."
+    selection = list(table.keys)
+    a = float()
+    for index in range(len(selection)):
+        if table_key < selection[0] or table_key > selection[-1]:
+            raise ValueError(error_message)
+        elif table_key >= selection[index]:
+            xp = [selection[index],selection[index-1]]
+            fp = [table[i] for i in xp]
+            a = np.interp(table_key,xp,fp)
+    return a
+
+def interpolate_table_tuple_pair(table: dict, table_key: float):
+    """Interpolates between the values stored in a dictionary, given that the values are a 2-tuple.
+    Assumes the keys are increasing, such that the first key is of highest numerical value.
+
+    Args:
+        table (dict): Dictionary containing the values to be interpolated.
+        table_key (float): Key, or input, for which to interpolate the value.
+
+    Returns:
+        tuple: 2-tuple containing the interpolated values for the corresponding key.
+    """
+    error_message = f"The input table_key is not within the bounds of the dictionary keys, being {selection[0]} and {selection[-1]}."
+    selection = list(table.keys())
+    a, b = float(), float()
+    for index in range(len(selection)):
+        if table_key > selection[0] or table_key < selection[-1]:
+            raise ValueError(error_message)
+        elif table_key >= selection[index]:
+            xp = [selection[index], selection[index-1]]
+            fp1, fp2 = [table[i][0] for i in xp], [table[i][1] for i in xp]
+            a, b = np.interp(table_key,xp,fp1), np.interp(table_key,xp,fp2)
+    return (a,b)
 class Shaft:
     """By default, the shaft will be initialized as a steel shaft. These values will be input later."""
-    def __init__(self, length, stresses, material):
-        self.Sy, self.Sut, self.HB, self.nu, self.E, self.G, self.rho = material # perhaps read a dictionary of stress values to input a material
+    def __init__(self, length, stresses, material_name):
+        self.Sy, self.Sut, self.HB, self.nu, self.E, self.G, self.rho = steels[material_name] # perhaps read a dictionary of stress values to input a material
         # Should we store properties in an array or explicitly as attributes? Is it necessary or should we have global values?
         self.length = length
         self.components = dict() # should the components be the keys or the values?
         self.stress_concentrations = dict()
-        self.ktx = None
-        self.ktb = None
-        self.kts = None
+        self.ktx = dict()
+        self.ktb = dict()
+        self.kts = dict()
+        self.ktf = dict()
         self.diameter = dict()
         self.rotating = False
         self.ang_speed = None
@@ -43,15 +87,18 @@ class Shaft:
             initial_d (num): The diameter before the feature.
             final_d (num, optional): The diameter after the feature, if it is different. Defaults to None.
         """
+
+        if 2 * radius > initial_d or 2 * radius > final_d:
+            raise ValueError("The assigned radius of the groove or fillet exceeds the diameter of the shaft.")
         self.stress_concentrations[axial_pos] = (radius, initial_d, final_d if final_d != None else initial_d)
         if sum(self.stress_state[0]) != 0: # to check for each possibility of a tensile force, bending moment, and torque
-            self.get_kt_axial()
+            self.set_kt_axial()
         if sum(self.stress_state[1]) != 0: # bending check
-            self.get_kt_bending()
+            self.set_kt_bending()
         if sum(self.stress_state[2]) != 0: # torsion check
-            self.get_kt_torsion()
+            self.set_kt_torsion()
 
-    def get_kt_axial(self):
+    def set_kt_axial(self):
         # need to consider the effect of both bending and axial forces. How can this be achieved?
         # need to also choose centering of the stress concentration for later consideration...
         if len(self.stress_concentrations) != 0:
@@ -61,13 +108,13 @@ class Shaft:
                 r, D = vals[0:2]
                 d = D - 2 * r
                 if vals[1] == vals[2]:
-                    a, b = kt_groove_tension[D / d]
+                    a, b = interpolate_table_tuple_pair(kt_groove_tension, D / d)
                     self.ktx[pos] = a * (r/d) ** b
                 else:
-                    a, b = kt_shoulder_fillet_tension[D / vals[2]]
+                    a, b = interpolate_table_tuple_pair(kt_shoulder_fillet_tension, D / min(vals[1],vals[2]))
                     self.ktx[pos] = a * (r/vals[2]) ** b
 
-    def get_kt_bending(self):
+    def set_kt_bending(self):
         if len(self.stress_concentrations) != 0:
             keys = self.stress_concentrations.keys()
             for pos in keys:
@@ -75,13 +122,13 @@ class Shaft:
                 r, D = vals[0:2]
                 d = D - 2 * r
                 if vals[1] == vals[2]:
-                    a, b = kt_groove_bending[D / d]
+                    a, b = interpolate_table_tuple_pair(kt_groove_bending, D / d)
                     self.ktb[pos] = a * (r/d) ** b
                 else:
-                    a, b = kt_shoulder_fillet_bending[D / vals[2]]
+                    a, b = interpolate_table_tuple_pair(kt_shoulder_fillet_bending, D / min(vals[1],vals[2]))
                     self.ktb[pos] = a * (r/vals[2]) ** b
     
-    def get_kt_torsion(self):
+    def set_kt_torsion(self):
         if len(self.stress_concentrations) != 0:
             keys = self.stress_concentrations.keys()
             for pos in keys:
@@ -89,30 +136,14 @@ class Shaft:
                 r, D = vals[0:2]
                 d = D - 2 * r
                 if vals[1] == vals[2]:
-                    a, b = kt_groove_tension[D / d]
+                    a, b = interpolate_table_tuple_pair(kt_groove_tension, D / d)
                     self.kts[pos] = a * (r/d) ** b
                 else:
-                    a, b = kt_shoulder_fillet_tension[D / vals[2]]
+                    a, b = interpolate_table_tuple_pair(kt_shoulder_fillet_tension, D / min(vals[1],vals[2]))
                     self.kts[pos] = a * (r/vals[2]) ** b
-
-metal = steel_carbon["cold rolled"][1010]
-stresses = [[0, 0, 0],[0, 10, 0],[0, 0, 0]]
-length = 5
-shaft = Shaft(length,stresses,metal)
-print(len(shaft))
-shaft.diameter = {0 : 0.3, 3 : 0.275}
-print(len(shaft.stress_concentrations))
-shaft.add_stress_concentration(3, 0.3, 0.275)
-shaft.ktb
-
-
-            
-
-
-
-
-
-
+    
+    def set_kf(self):
+        return
 
 
     

@@ -1,7 +1,7 @@
 nu_steel_alloy, E_steel_alloy, G_steel_alloy, rho_steel_alloy = 0.28, 206.8, 80.8, 7800
 props = nu_steel_alloy, E_steel_alloy, G_steel_alloy, rho_steel_alloy
 
-steel_carbon = {
+steels = {
     # Standard notation as (Sy, Sut, HB, ν, E, G, ρ)
     # List of different carbon steels as taken from the textbook
     1010 : {
@@ -57,12 +57,8 @@ steel_carbon = {
         "tempered 1200" : (552, 896, 269) + props,
         "tempered 800" : (772, 1213, 363) + props,
         "tempered 600" : (814, 1262, 375) + props
-    }
-}
+    },
 
-steel_alloy = {
-    # Standard notation as (Sy, Sut, HB, ν, E, G, ρ) ; key is [<number>], and then [<working type>]
-    # List of different alloy steels as taken from the textbook
     1340 : {
         "annealed" : (434, 703, 204) + props,
         "tempered" : (752, 862, 250) + props

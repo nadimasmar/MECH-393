@@ -41,7 +41,7 @@ kt_shoulder_fillet_torsion = {
 kt_groove_tension = {
     # Key is [D/d], yields (a,b) for a * (r/d) ** b
     # Constants from tables used for approximating the stress concentration factor through a groove under tension
-    "inf" : (0.99372, -0.39352),
+    # "inf" : (0.99372, -0.39352),
     2.00 : (0.99383, -0.38231),
     1.50 : (0.99808, -0.36955),
     1.30 : (1.00490, -0.35545),
@@ -58,7 +58,7 @@ kt_groove_tension = {
 kt_groove_bending = {
     # Key is [D/d], yields (a,b) for a * (r/d) ** b
     # Constants from tables used for approximating the stress concentration factor through a groove under a bending moment
-    "inf" : (0.94801, -0.33302),
+    # "inf" : (0.94801, -0.33302),
     2.00 : (0.93619, -0.33066),
     1.50 : (0.93894, -0.32380),
     1.30 : (0.94299, -0.31504),
@@ -76,7 +76,7 @@ kt_groove_bending = {
 kt_groove_torsion = {
     # Key is [D/d], yields (a,b) for a * (r/d) ** b
     # Constants from tables used for approximating the stress concentration factor through a groove under an axial torque
-    "inf" : (0.88126, -0.25204),
+    # "inf" : (0.88126, -0.25204),
     2.00 : (0.89035, -0.24075),
     1.30 : (0.89460, -0.23267),
     1.20 : (0.90182, -0.22334),
