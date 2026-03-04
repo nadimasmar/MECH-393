@@ -7,6 +7,7 @@ calculate specific factors and should not be called directly by users of the mod
 '''
 
 import numpy as np
+from fatigue_strength_calculator_tables import *
 
 class FatigueStrengthCalculator:
 
@@ -43,6 +44,7 @@ class FatigueStrengthCalculator:
         
     @staticmethod
     def C_surface(surface_finish, S_ut):
+        # Could be modified to work with the graphs
         '''Calculate the surface finish factor C for fatigue strength based on surface finish.
         S_ut is the ultimate tensile strength in MPa. If C_surf greater than 1, it is set to 1'''
         if surface_finish == "ground":
@@ -72,16 +74,7 @@ class FatigueStrengthCalculator:
     @staticmethod
     def C_reliab(reliability_percentage):
         '''Calculate the reliability factor C for fatigue strength based on the desired reliability percentage.'''
-        reliability_factors = {
-            50      : 1.0,
-            90      : 0.897,
-            95      : 0.868,
-            99      : 0.814,
-            99.9    : 0.753,
-            99.99   : 0.702,
-            99.999  : 0.659,
-            99.9999 : 0.620
-        }
+        reliability_factors = marin_reliability
         if reliability_percentage not in reliability_factors:
             raise ValueError("Unsupported reliability percentage. Must be one of: " + ", ".join(map(str, reliability_factors.keys())))
         return reliability_factors[reliability_percentage]
