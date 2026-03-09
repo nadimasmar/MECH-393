@@ -1,4 +1,4 @@
-nu_steel_alloy, E_steel_alloy, G_steel_alloy, rho_steel_alloy = 0.28, 206.8, 80.8, 7800
+nu_steel_alloy, E_steel_alloy, G_steel_alloy, rho_steel_alloy = 0.29, 206.8, 80.8, 7870
 props = nu_steel_alloy, E_steel_alloy, G_steel_alloy, rho_steel_alloy
 
 steels = {
@@ -9,25 +9,25 @@ steels = {
         "hot rolled" : (179, 324, 95) + props
     },
     1020 : {
-        "cold rolled" : (393, 469, 131) + props,
-        "hot rolled" : (207, 379, 111) + props
+        "cold rolled" : (393, 469, 131, 0.29, 186, 72.0, 7870),
+        "hot rolled" : (207, 379, 111, 0.29, 186, 72.0, 7870),
     },
     1030 : {
-        "cold rolled" : (441, 524, 149) + props,
+        "cold rolled" : (441, 524, 149, 0.29, E_steel_alloy, G_steel_alloy, 7850), # for a round
         "hot rolled" : (259, 469, 137) + props,
-        "normalized" : (345, 517, 149) + props,
+        "normalized" : (345, 517, 149, 0.29, E_steel_alloy, G_steel_alloy, 7850),
         "tempered 1000" : (517, 669, 255) + props,
         "tempered 800" : (579, 731, 302) + props,
-        "tempered 400" : (648, 848, 495) + props
+        "tempered 400" : (648, 848, 495) + props # incomplete section
     },
     1035 : {
-        "cold rolled" : (462, 552, 163) + props,
-        "hot rolled" : (276, 496, 143) + props
+        "cold rolled" : (462, 552, 163, nu_steel_alloy, 196, 76.0, 7850),
+        "hot rolled" : (276, 496, 143, nu_steel_alloy, 196, 76.0, rho_steel_alloy)
     },
     1040 : {
         "cold rolled" : (490, 586, 170) + props,
-        "hot rolled" : (290, 524, 149) + props,
-        "normalized" : (372, 593, 170) + props,
+        "hot rolled" : (290, 524, 149, nu_steel_alloy, 200, 80.0, 7845),
+        "normalized" : (372, 593, 170, nu_steel_alloy, 200, 80.0, 7845),
         "tempered 1200" : (434, 634, 192) + props,
         "tempered 800" : (552, 758, 241) + props,
         "tempered 400" : (593, 779, 292) + props
@@ -38,7 +38,7 @@ steels = {
     },
     1050 : {
         "cold rolled" : (579, 689, 197) + props,
-        "hot rolled" : (579, 689, 197) + props,
+        "hot rolled" : (340, 620, 179) + props,
         "normalized" : (427, 745, 217) + props,
         "tempered 1200" : (538, 717, 235) + props,
         "tempered 800" : (793, 1089, 444) + props,

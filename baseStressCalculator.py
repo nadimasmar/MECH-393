@@ -1,109 +1,127 @@
 import numpy as np
 
-class baseStressesCalculator:
+class baseStressCalculator:
     stress_state = np.zeros([3,3])
 
-    class solidShaftStress:
-        '''All the below formulae are assuming that the stress is evaluated at critical points, 
-        which almost always lie on the surface of a solid. '''
+    '''class solidShaftStress:
+    All the below formulae are assuming that the stress is evaluated at critical points, 
+    which almost always lie on the surface of a solid.
+    '''
 
-        @staticmethod
-        def axial_stress(force, diameter):
-            """Determines the normal stress on a perpendicular cross-section in a cylindrical shaft.
+    @staticmethod
+    def axial_stress(force, diameter):
+        """Determines the normal stress on a perpendicular cross-section in a cylindrical shaft.
 
-            Args:
-                force (num): The magnitude of an equivalent axial point force
-                diameter (num): The diameter of the shaft.
+        Args:   
+            force (num): The magnitude of an equivalent axial point force
+            diameter (num): The diameter of the shaft.
 
-            Raises:
-                TypeError: Evaluates the type of <force> and <diameter> as numerical values.
+        Raises:
+            TypeError: Evaluates the type of <force> and <diameter> as numerical values.
 
-            Returns:
-                float: The axial normal stress. 
-            """            
-            # Assuming Saint-Venant's principle applies and that a point force can be resolved.
-            if not isinstance(force,(float, int)) and isinstance(diameter,(float, int)):
-                raise TypeError("The force and diameter entered must be numerical values.")
-            return 4 * force / (np.pi * diameter ** 2)
-        
-        @staticmethod
-        def shear_stress(force, diameter):
-            """Determines the shear stress along a perpendicular cross-section in a cylindrical shaft.
+        Returns:
+            float: The axial normal stress. 
+        """            
+        # Assuming Saint-Venant's principle applies and that a point force can be resolved.
+        if not isinstance(force,(float, int)) and isinstance(diameter,(float, int)):
+            raise TypeError("The force and diameter entered must be numerical values.")
+        return 4 * force / (np.pi * diameter ** 2)
+    
+    @staticmethod
+    def shear_stress(force, diameter):
+        """Determines the shear stress along a perpendicular cross-section in a cylindrical shaft.
 
-            Args:
-                force (num): The shear force being applied to shaft.
-                diameter (num): The diameter of the shaft.
+        Args:
+            force (num): The shear force being applied to shaft.
+            diameter (num): The diameter of the shaft.
 
-            Raises:
-                TypeError: Evaluates the type of <force> and <diameter> as numerical values.
+        Raises:
+            TypeError: Evaluates the type of <force> and <diameter> as numerical values.
 
-            Returns:
-                float: The shear stress.
-            """            
-            # Assuming Saint-Venant's principle applies and that a point force can be resolved.
-            if not isinstance(force,(float, int)) and isinstance(diameter,(float, int)):
-                raise TypeError("The force and diameter entered must be numerical values.")
-            return 4 * force / (np.pi * diameter ** 2)
-        
-        @staticmethod
-        def torsion_stress(load, diameter, is_torque=True):
-            # Assuming Saint-Venant's principle applies and applying the linearized 
-            # small-angle approximation
-            """Determines the shear stress developed due to a torque applied on the shaft. 
+        Returns:
+            float: The shear stress.
+        """            
+        # Assuming Saint-Venant's principle applies and that a point force can be resolved.
+        if not isinstance(force,(float, int)) and isinstance(diameter,(float, int)):
+            raise TypeError("The force and diameter entered must be numerical values.")
+        return 4 * force / (np.pi * diameter ** 2)
+    
+    @staticmethod
+    def torsion_stress(load, diameter, is_torque=True):
+        # Assuming Saint-Venant's principle applies and applying the linearized 
+        # small-angle approximation
+        """Determines the shear stress developed due to a torque applied on the shaft. 
 
-            Args:
-                load (num): Point force/torque being applied on the surface of the shaft.
-                diameter (num): The diameter of the shaft
-                is_torque (bool, optional): Sets whether to treat <force> as a point force or 
-                torque. Defaults to True.
+        Args:
+            load (num): Point force/torque being applied on the surface of the shaft.
+            diameter (num): The diameter of the shaft
+            is_torque (bool, optional): Sets whether to treat <force> as a point force or 
+            torque. Defaults to True.
 
-            Raises:
-                TypeError: Evaluates the type of <load> and <diameter> as numerical values.
-                TypeError: Evaluates the type ot <is_torque> as a boolean.
+        Raises:
+            TypeError: Evaluates the type of <load> and <diameter> as numerical values.
+            TypeError: Evaluates the type ot <is_torque> as a boolean.
 
-            Returns:
-                float: The shear stress.
-            """            
-            if not isinstance(load,(float, int)) and isinstance(diameter,(float, int)):
-                raise TypeError("The load and diameter entered must be numerical values.")
-            J0 = np.pi * diameter ** 4 / 32
-            if is_torque == True:
-                return load * diameter / J0
-            elif is_torque == False:
-                return load * diameter ** 2 / J0
-            else:
-                raise TypeError("The optional parameter is_torque must be of type bool.")
+        Returns:
+            float: The shear stress.
+        """            
+        if not isinstance(load,(float, int)) and isinstance(diameter,(float, int)):
+            raise TypeError("The load and diameter entered must be numerical values.")
+        J0 = np.pi * diameter ** 4 / 32
+        if is_torque == True:
+            return load * diameter / J0
+        elif is_torque == False:
+            return load * diameter ** 2 / J0
+        else:
+            raise TypeError("The optional parameter is_torque must be of type bool.")
 
-        
-        @staticmethod
-        def bending_stress(moment, diameter, outer=True):
-            """Determines the axial stress generated by a bending moment in a solid cylindrical shaft. 
-            In the case that an alternating stress must be determined, do not modify the optional 
-            argument <outer>.
+    
+    @staticmethod
+    def bending_stress(moment, diameter, outer=True):
+        """Determines the axial stress generated by a bending moment in a solid cylindrical shaft. 
+        In the case that an alternating stress must be determined, do not modify the optional 
+        argument <outer>.
 
-            Args:
-                moment (num): The moment applied on the shaft perpendicular to the length-wise axis.
-                diameter (num): The diameter of the cylindrical shaft
-                outer (bool, optional): Whether to evaluate the stress on the elongated surface of the 
-                    shaft. Defaults to True.
+        Args:
+            moment (num): The moment applied on the shaft perpendicular to the length-wise axis.
+            diameter (num): The diameter of the cylindrical shaft
+            outer (bool, optional): Whether to evaluate the stress on the elongated surface of the 
+                shaft. Defaults to True.
 
-            Raises:
-                TypeError: Evaluating the type of <moment> and <diameter> as numerical values
-                TypeError: Evaluating the type of <outer> as a boolean.
+        Raises:
+            TypeError: Evaluating the type of <moment> and <diameter> as numerical values
+            TypeError: Evaluating the type of <outer> as a boolean.
 
-            Returns:
-                float: The stress developed on the surface of the shaft.
-            """            
-            if not isinstance(moment,(float, int)) and isinstance(diameter,(float, int)):
-                raise TypeError("The moment and diameter entered must be numerical values.")
-            I_zz = np.pi * diameter ** 4 / 64
-            sigma = moment * diameter / (I_zz * 2)
-            if outer == True:
-                return sigma
-            elif outer == False:
-                return -sigma
-            else:
-                raise TypeError("The optional parameter is_torque must be of type bool.")
+        Returns:
+            float: The stress developed on the surface of the shaft.
+        """            
+        if not isinstance(moment,(float, int)) and isinstance(diameter,(float, int)):
+            raise TypeError("The moment and diameter entered must be numerical values.")
+        I_zz = np.pi * diameter ** 4 / 64
+        sigma = moment * diameter / (I_zz * 2)
+        if outer == True:
+            return sigma
+        elif outer == False:
+            return -sigma
+        else:
+            raise TypeError("The optional parameter is_torque must be of type bool.")
+    
+    @staticmethod
+    def transverse_shear(shear, diameter):
+        """Note that this is maximized at the center of the shaft.
+
+        Args:
+            shear (_type_): _description_
+            diameter (_type_): _description_
+
+        Raises:
+            ValueError: _description_
+            TypeError: _description_
+
+        Returns:
+            _type_: _description_
+        """        
+        return 4 * shear / (3 / 4* np.pi * diameter ** 2)
 
     @staticmethod
     def von_mises_equivalent(tensor: np.ndarray):

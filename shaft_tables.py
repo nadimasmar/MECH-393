@@ -86,6 +86,28 @@ kt_groove_torsion = {
     1.01 : (0.97245, -0.10162)
 }
 
+kt_keyseat_bending = {
+    # Key is the chosen location: This can be at a critical point on the surface
+    # of the shaft or at an incline of 15 deg. from the base of the keyseat.
+    # Only applies to keyseats with semi-circular ends. r is the radius of the 
+    # FILLET between keyseat wall and base!
+    # yields (a,b,c) for a + b * (0.1d/r) + c * (0.1d/r) ** 2
+    # VAID FOR d < 6.5 in (165 mm), r/d in [0.005, 0.04]
+    "A" : (1.6),
+    "B" : (1.426, 0.1623, -0.0019)
+}
+
+kt_keyseat_torsion = {
+    # Use the above as guide
+    # VALID FOR d < 165 mm, r/d in [0.005, 0.07]
+    "A" : (3.4),
+    "B" : (1.953, 0.1434, -0.0021)
+}
+
+# The above could easily be changed depending on the standard we set for r/d.
+# There are some american and ISO standards that help reduce the complexity of 
+# this.
+
 neuber_steel = {
     # Dictionary of neuber constants for steels. Key is [<Sut, in kpsi>], value is sqrt(a)
     50  : 0.130,
