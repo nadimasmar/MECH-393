@@ -47,17 +47,11 @@ class FatigueStrengthCalculator:
         # Could be modified to work with the graphs
         '''Calculate the surface finish factor C for fatigue strength based on surface finish.
         S_ut is the ultimate tensile strength in MPa. If C_surf greater than 1, it is set to 1'''
-        if surface_finish == "ground":
-            return np.min([1.58 * (S_ut ** -0.085), 1.0])
-        elif surface_finish == "machined" or surface_finish == "cold-rolled":
-            return np.min([4.51 * (S_ut ** -0.265), 1.0])
-        elif surface_finish == "hot-rolled":
-            return np.min([57.7 * (S_ut ** -0.718), 1.0])
-        elif surface_finish == "as-forged":
-            return np.min([272 * (S_ut ** -0.995), 1.0])
-
-        else:
+        if surface_finish not in marin_surface_metric.keys():
             raise ValueError("Unsupported surface finish. Must be 'ground', 'machined', 'cold-rolled', 'hot-rolled', or 'as-forged'.")
+        a,b = marin_surface_metric[surface_finish]
+        return np.min([a * S_ut ** b, 1])
+        
         
     @staticmethod
     def C_load(load_type):

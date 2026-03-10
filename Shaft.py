@@ -1,13 +1,15 @@
 from shaft_tables import *
 from tables_values import *
 import numpy as np
-from numpy import pi
 from Goodman_safety_factor_calculator import *
 from Fatigue_strength_calculator import *
 from baseStressCalculator import *
+from beambending import beam
 
 ''' All values in SI units (mm, N, etc.), and keys are assumed to be
 rectangular parallel keys, unless otherwise specified.'''
+
+pi = np.pi
 
 def interpolate_table_dimensions(table: dict, table_key: float):
     """Interpolates between the dimensionss stored in a dictionary, given that the dimensionss are of num type.
@@ -55,19 +57,23 @@ def interpolate_table_tuple_pair(table: dict, table_key: float):
 
 class Shaft:
     pi = np.pi
-    """By default, the shaft will be initialized as a steel shaft. These dimensionss will be input later."""
-    def __init__(self, length, stresses, material_name, working, diameter):
+    """By default, the shaft will be initialized as a steel shaft. These dimensions will be input later."""
+    def __init__(self, length, material_name, working, diameter):
         self.material = material_name
         self.Sy, self.Sut, self.HB, self.nu, self.E, self.G, self.rho = steels[material_name][working]
         self.length = length
         self.diameter = self._configure_diameter(diameter) # a bit annoying to pronounce
         self.volume = 0
-        self.components = dict() # should the components be the keys or the dimensionss?
+        self.gears = dict()
+        self.keys = dict()
+        self.bearings = dict()
         self._stress_concentrations = dict()
         self._stress_factors = dict()
         self.rotating = False
         self.ang_speed = None
-        self.stress_state = stresses # This should be standardized as the stresses at x = 0 (maybe, this would zero the 
+        self.point_loads = set()
+        self.torques = set()
+        self.distributed_loads = set() # This should be standardized as the stresses at x = 0 (maybe, this would zero the 
         # moment in shear moment diagram)
 
     def __len__(self):
@@ -251,54 +257,70 @@ class Shaft:
         self.mass = mass
         return mass
 
-def min_shaft_diameter(initial_guess, torque, tension, mass, length, Sy, Sut):
-    """This is a very entry-level optimizer for the shaft. It assumes it is a simply supported beam
-    at both ends, and that there are two supports positioned at the limits of the shafts. 
+    def add_gear(self, axial_pos: float, gear: Gear):
+        self.gears[axial_pos] = gear
 
-    This does not yet account for stress concentration factors.
-
-    Args:
-        initial_guess (_type_): _description_
-        torque (_type_): _description_
-        tension (_type_): _description_
-        mass (_type_): _description_
-        length (_type_): _description_
-    """
-
-    d = initial_guess
-    reaction_force = mass * 9.81 / 2        
-    bending_moment = length * reaction_force/ 2 # divided by the number of fixtures/bearings and the 
-    # reaction force balance
-    alt_bending = baseStressCalculator.bending_stress(bending_moment, d)
-    mean_axial = baseStressCalculator.axial_stress(tension, d)
-    mean_torque = baseStressCalculator.torsion_stress(torque, d)
-    alt_shear = 0 # baseStressCalculator.transverse_shear(reaction_force, d)
-
-    kf = 1
-    kfs = 1
-    kfm = 1
-    kfsm = 1
-
-    alt_tensor = np.array([[alt_bending, alt_shear, 0], [alt_shear, 0, 0],[0, 0, 0]])
-    mean_tensor = np.array([[mean_axial, mean_torque, 0],[mean_torque, 0, 0],[0, 0, 0]])
-    alternating_stress = baseStressCalculator.von_mises_equivalent(alt_tensor)
-    mean_stress = baseStressCalculator.von_mises_equivalent(mean_tensor)
-    Nf = GoodmanSafetyFactorCalculator.calc_safety_factor_case_1(Sy, alternating_stress, mean_stress)
-    Sf = 0
-    d = (32 * Nf / pi * (np.sqrt((kf * alt_bending) ** 2 + 3 / 4 * (kfs * alt_shear) ** 2) / Sf + \
-                         np.sqrt((kfm * mean_axial) ** 2 + 3 / 4 * (kfsm * alt_bending) ** 2))) ** (1/3)
+        # We will inherit forces from gears using the embedded point force classes.
+        applied_force = 0 # Need a stored force or stress to reconvert
+        self.point_loads.add(beam.PointLoadH(applied_force * np.tan(Gear.pressure_angle), axial_pos))
     
+    def add_key(self, axial_pos: float, key: Key):
+        self.keys[axial_pos] = key
 
-    return
-"""some functions could be defined:
+        torque = 0
+        self.torques.add((torque, axial_pos))
+    
+    def get_shear_moment_diagrams(self):
+        return 0
 
-find critical points would return positions where the moment or shear is maximum, or where there are stress concentrations
-Need a method of storing stress concentration features on the shaft
-determine torque transfer and resulting velocity: done through the gear ratio
-critical diameter of a shaft
-critical length of a key
-optimal gear ratio
-safety factors! Or force safety factors dependent on case (see the slides for specific cases)
-"""
+    def min_shaft_diameter(self, initial_guess, torque, tension, mass, length, Sy, Sut):
+        """This is a very entry-level optimizer for the shaft. It assumes it is a simply supported beam
+        at both ends, and that there are two supports positioned at the limits of the shafts. 
+
+        This does not yet account for stress concentration factors.
+
+        Args:
+            initial_guess (_type_): _description_
+            torque (_type_): _description_
+            tension (_type_): _description_
+            mass (_type_): _description_
+            length (_type_): _description_
+        """
+
+        d = initial_guess
+        d0 = 0
+        norm = 0.01
+        reaction_force = mass * 9.81 / 2        
+        bending_moment = length * reaction_force/ 2 # divided by the number of fixtures/bearings and the 
+        gear_moment = 0
+        # reaction force balance
+        while d - d0 > norm:
+            d0 = d
+            weight_bending = baseStressCalculator.bending_stress(bending_moment, d)
+            gear_bending = baseStressCalculator.bending_stress(gear_moment, d)
+            mean_axial = baseStressCalculator.axial_stress(tension, d)
+            mean_torque = baseStressCalculator.torsion_stress(torque, d)
+            alt_shear = 0 # baseStressCalculator.transverse_shear(reaction_force, d)
+
+            factors = self.stress_factors
+            kf = factors["kf"]
+            kfs = factors["kfs"]
+            kfm = factors["kfm"]
+            kfsm = factors["kfsm"]
+
+            alt_tensor = np.array([[weight_bending, alt_shear, 0], [alt_shear, gear_bending, 0],[0, 0, 0]])
+            mean_tensor = np.array([[mean_axial, mean_torque, 0],[mean_torque, 0, 0],[0, 0, 0]])
+            alternating_stress = baseStressCalculator.von_mises_equivalent(alt_tensor)
+            mean_stress = baseStressCalculator.von_mises_equivalent(mean_tensor)
+            Nf = GoodmanSafetyFactorCalculator.calc_safety_factor_case_1(Sy, alternating_stress, mean_stress)
+            dimensions = {"diameter" : d}
+            Sf = FatigueStrengthCalculator.calc_corrected_fatigue_strength(
+                Sut, "steel", "shaft", dimensions, "cold-rolled", "bending", 99.99, 25)
+            d = (32 * Nf / pi * (np.sqrt((kf * weight_bending) ** 2 + 3 / 4 * (kfs * alt_shear) ** 2) / Sf + \
+                                np.sqrt((kfm * mean_axial) ** 2 + 3 / 4 * (kfsm * weight_bending) ** 2))) ** (1/3)        
+        return d
+
+
+
 
 # Should we define a subclass within the Shaft class as something like a ShaftAssembly? It would inherit the attributes but we could add that dictionary of components.
