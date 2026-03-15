@@ -89,6 +89,17 @@ J_table_25degrees = {
     (135, 135): {"pinion": 0.57, "gear": 0.57},
 }
 
+def dynamic_factor(quality: int, pitch_vel: float):
+    Kv = float()
+    Qv = quality
+    assert Qv <= 12, "Very accurate gearing is outside the scope of this project"
+    if Qv <= 5:
+        Kv = 50 / (50 + (200 * pitch_vel) ** 0.5)
+    B = 0.25 * (12 - Qv) ** 2/3
+    A = 50 + 56 * (1 - B)
+    Kv = (A / (A + (200 * pitch_vel) ** 0.5 )) ** B
+    return Kv
+
 load_distribution_factor = {
     50  : 1.6,
     150 : 1.7,
@@ -115,7 +126,7 @@ application_factor = {
     }
 }
 
-size_factor = 1 # as specified in class
+size_factor, idler_factor= 1, 1.42 # as specified in class
 
 rim_thickness_factor = {
     0 : None,
@@ -123,9 +134,23 @@ rim_thickness_factor = {
     1.2 : (0,1.0)
 }
 
+
 life_factor = {
-    # need to figure this out later
+    # In the low-cyle dictionary, hardness values are specified to allow for interpolation.
+    # Output is a tuple (a,b) for the equation KL = a * N ** b
+    "low-cycle" : {
+        400 : (9.4518, -0.148),
+        250 : (4.9404, -0.1045),
+        160 : (2.3194, -0.0538)
+    },
+    "high-cycle" :  {
+        "non-critical" : (1.3558, -0.0178),
+        "critical" : (1.6831,-0.0323),
+    }
 }
+
+def temperature_factor(temperature):
+    return max((460 + (32 + 9 / 5 * temperature) / 620), 1)
 
 reliability_factor = {
     90    : 0.85,
@@ -133,3 +158,14 @@ reliability_factor = {
     99.9  : 1.25,
     99.99 : 1.50
 }
+
+surface_life_factor = {
+    "low-cycle" : (2.466, -0.056),
+    "low-cycle nitrided" : (1.249, -0.0138),
+    "non-critical" : (1.4488, -0.023)
+}
+
+elastic_coefficient_4140 = 5.99 # NEED TO CHECK WITH PROF, UNITS ARE WRONG IN SLIDES
+
+hardness_ratio_factor = 1 # We won't consider different materials, 
+# unless we actually want to (for the sake of mass optimization)

@@ -99,3 +99,39 @@ steels = {
 
 # This is a stainless steel that is extremely strong, we could verify the comparison in density to other steels. Values taken when quenched & treated at 600F.
 stainless_steel = (1896, 1965, 57) + props
+
+def sfb_prime(brinell_hardness: float | int, grade: int, quadratic=True):
+    strength = 0
+    if quadratic:
+        if grade == 1:
+            strength = -274 + 167 * brinell_hardness - 0.152 * brinell_hardness ** 2
+        elif grade == 2:
+            strength = 6235 + 174 * brinell_hardness - 0.126 * brinell_hardness ** 2
+        else:
+            raise ValueError("Unsupported AGMA gear grade")
+    else:
+        if grade == 1:
+            strength = 77.3 * brinell_hardness + 12800
+        elif grade == 2:
+            strength = 102 * brinell_hardness + 16400
+        else:
+            raise ValueError("Unsupported AGMA gear grade")
+    return strength
+
+def sfc_prime(brinell_hardness: float | int, grade: int, from_slides=True):
+    strength = 0
+    if from_slides:
+        if grade == 1:
+            strength = 327 * brinell_hardness + 26000
+        elif grade == 2:
+            strength = 364 * brinell_hardness + 27000
+        else:
+            raise ValueError("Unsupported AGMA gear grade")
+    else:
+        if grade == 1:
+            strength = 327 * brinell_hardness + 26000
+        elif grade == 2:
+            strength = 349 * brinell_hardness + 34300
+        else:
+            raise ValueError("Unsupported AGMA gear grade")
+    return strength

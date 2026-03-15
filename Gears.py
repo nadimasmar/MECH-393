@@ -209,6 +209,22 @@ class gear:
             if vals is None:
                 raise ValueError("Invalid combination of teeth numbers for 25 degree pressure angle.")
             return vals
+    
+    @staticmethod
+    def surface_geometry_factor(pinion: "gear", gear: "gear"):
+        pitch_d,pitch_r,dp,phi = float(),float(),float(),float()        
+        
+        dp = pinion.pitch_diameter
+        rp = pitch_d / 2
+        pd = pinion.diametral_pitch
+        phi = pinion.pressure_angle
+        C = rp + gear.pitch_diameter / 2
+
+
+        radius_pinion = ((pitch_r + 1 / pd) ** 2 - (pitch_r * np.cos(phi))) ** 0.5 - np.pi / pd * np.cos(phi)
+        radius_gear = C * np.sin(phi) - radius_pinion
+
+        return np.cos(phi) / ((1 / radius_pinion + 1 / radius_gear) * dp)
 
 def meshgears(gear1, gear2, displayInfo=False):
     gear1.meshwith(gear2)
