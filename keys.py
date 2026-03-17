@@ -9,12 +9,18 @@ class Key:
         self.width = width
         self.height = height
         self.length = length
+        self.shear_stress = None
+        self.compressive_stress = None
 
     def calc_shear_stress(self, torque, shaft_diameter):
-        return (2 * torque) / (self.width * self.length * shaft_diameter)
+        tau = (2 * torque) / (self.width * self.length * shaft_diameter)
+        self.shear_stress = tau
+        return tau
 
     def calc_compressive_stress(self, torque, shaft_diameter):
-        return (4 * torque) / (self.height * self.length * shaft_diameter)
+        sigma = (4 * torque) / (self.height * self.length * shaft_diameter)
+        self.compressive_stress = sigma
+        return sigma
 
     @staticmethod
     def stress_concentration_factor():

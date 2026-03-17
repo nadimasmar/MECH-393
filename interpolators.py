@@ -46,3 +46,34 @@ def interpolate_table_tuple_pair(table: dict, table_key: float):
             fp1, fp2 = [table[i][0] for i in xp], [table[i][1] for i in xp]
             a, b = float(np.interp(table_key,xp,fp1)), float(np.interp(table_key,xp,fp2))
     return (a,b)
+
+def interpolate_table_2tuple_tuple(table: dict, table_key: tuple):
+    a, b = table_key
+    c, d = float, float
+    pinion_list, gear_list = zip(*table.keys())
+    if a < pinion_list[0] or a > pinion_list[-1]:
+        raise ValueError("The input number of pinion teeth" \
+        "is not within the bounds of the dictionary keys, " \
+        f"being {pinion_list[0]} and {pinion_list[-1]}.")
+    if b < gear_list[0] or b > gear_list[-1]:
+        raise ValueError("The input number of gear teeth" \
+        "is not within the bounds of the dictionary keys, " \
+        f"being {gear_list[0]} and {gear_list[-1]}.")
+    
+    xp1, xp2, fp1, fp2 = list, list, list, list
+
+    for i in range(len(pinion_list)):
+        if a >= pinion_list[i]:
+            xp1 = [pinion_list[i],pinion_list[i-1]]
+            fp1, fp2
+        for j in range(len(gear_list)):
+            if b >= gear_list[j]:
+                xp2 = [gear_list[j],gear_list[j-1]]
+                fp1, fp2 = [table[0][0]]
+
+            
+        
+    
+    
+    
+    return (a,b)

@@ -1,7 +1,9 @@
 import math
 import numpy as np
 import matplotlib.pyplot as plt
-from tables_values import J_table_20degrees, J_table_25degrees
+#from tables_values
+from gears_tables import *
+from interpolators import *
 
 '''
 externally calculated for now: velocity ratio mV, gear ratio mG, angvel, etc.
@@ -51,8 +53,13 @@ class gear:
         self.face_width = face_width      
         self.addemdum = addendum
         self.dedendum = dedendum
-        self.quality_index = quality_index      
-        
+        self.quality_index = quality_index
+        self.tooth_type = "full-depth"
+
+        self.sfb_prime = None
+        self.rho = 0
+        self.volume = None
+        self.mass = None       
         #addendum based on Table 12-1: AGMA Full-Depth Gear Tooth Specs
         
     def self_autofill_values(self): 
@@ -182,9 +189,10 @@ class gear:
 
     def get_face_widthFactor():
         pass
-    
+
+
     @staticmethod
-    def calc_bending_strength_factor(gear: "gear", pinion: "gear") -> tuple:
+    def calc_bending_strength_factor(gear: "gear", pinion: "gear",load_condition="tip loading") -> tuple:
         # Assuming Full-Depth Teeth with HPSTC Loading
 
         if not isinstance(gear, gear) or not isinstance(pinion, gear):
@@ -192,10 +200,19 @@ class gear:
         
         if gear.num_teeth < pinion.num_teeth:
             raise ValueError("First input must be the gear, which has more teeth than the pinion.")
-        
+        # Could change this so that the order does not matter
+        # Optionally make a check for the minimum number of teeth to prevent undercutting
         if gear.pressure_angle != pinion.pressure_angle:
             raise ValueError("Both gear and pinion must have the same pressure angle.")
+        
+        table = J_table[pinion.tooth_type][load_condition]["pinion"]
+        J_pinion = interpolate_table_dimensions(table["pinion"], pinion.num_teeth)
+        J_gear = interpolate_table_dimensions(table["gear"], gear.num_teeth)
 
+        return (J_pinion, J_gear)
+
+
+    '''
         if gear.pressure_angle == 20:
             J_table = J_table_20degrees
             vals = J_table.get((pinion.num_teeth, gear.num_teeth))
@@ -209,6 +226,11 @@ class gear:
             if vals is None:
                 raise ValueError("Invalid combination of teeth numbers for 25 degree pressure angle.")
             return vals
+    '''
+
+
+
+
     
     @staticmethod
     def surface_geometry_factor(pinion: "gear", gear: "gear"):
@@ -219,7 +241,6 @@ class gear:
         pd = pinion.diametral_pitch
         phi = pinion.pressure_angle
         C = rp + gear.pitch_diameter / 2
-
 
         radius_pinion = ((pitch_r + 1 / pd) ** 2 - (pitch_r * np.cos(phi))) ** 0.5 - np.pi / pd * np.cos(phi)
         radius_gear = C * np.sin(phi) - radius_pinion
