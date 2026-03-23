@@ -6,154 +6,57 @@ from gears_tables import *
 from interpolators import *
 
 '''
-externally calculated for now: velocity ratio mV, gear ratio mG, angvel, etc.
+externally calculated for now:  gear ratio mG, angvel.
 '''    
 
 class gear:
-    def __init__(self, 
-                 name=None, 
-                 pitch_diameter=None, num_teeth=None, pressure_angle=None,
-                 circular_pitch=None, base_pitch=None, diametral_pitch=None, module=None,
-                 addendum=None, dedendum=None,
-                 face_width=None, quality_index=None,
-                 angvel = None):
+    def __init__(self, *, module, num_teeth, pressure_angle, face_width, quality_index, torque, angular_velocity,
+                 sfb_prime, sfc_prime, idler=False):
         """
         Creates a Gear instance.
 
         Parameters
         ----------
-        name                [---]
-        pitch_diameter      [m]                     diameter of equivalent rolling cylinder
         num_teeth           [dimensionless]
         pressure_angle      [degrees]               angle between line of action (slanted), and velocity (pitch circle tangent)
-        circular_pitch      [m]                     distance on the pitch circle between the same point on two adjacent teeth. Equal to pitch circle circumference (pi*d), divided by the number of teeth (N)      
-        base_pitch          [m^-1]                  distance between one tooth and the next, on the base circle.
-        diametral_pitch     [m^-1]                  number of teeth per meter of diameter on the pitch circle. "how many teeth are laid out on an arc length equal to one pitch diameter?"
-        module              []
+        module              [m]                     pitch diameter per tooth
         face_width          [m]
-        addemdum            [m]     
-        dedendum            [m]
         quality_index       [?]                     uh
-        angvel              []
+        torque              [N m]
+        angular_velocity    [rad/s]
+
+        Derived automatically:
+        pitch_diameter, circular_pitch, base_pitch, diametral_pitch
         
         Raises
         ------
         Assertion Error
             If the provided number of teeth is too low to avoid undercutting for the provided gear pressure angle
         """
-        #preliminary initialization (filling known parameters)
-        self.name = name
-        self.pitch_diameter = pitch_diameter
+        # Preliminary initialization: required direct inputs
+        self.module = module
         self.num_teeth = num_teeth
         self.pressure_angle = pressure_angle
-        self.circular_pitch = circular_pitch
-        self.base_pitch = base_pitch
-        self.diametral_pitch = diametral_pitch
-        self.module = module
-        self.face_width = face_width      
-        self.addemdum = addendum
-        self.dedendum = dedendum
+        self.face_width = face_width
         self.quality_index = quality_index
+        self.torque = torque
+        self.angular_velocity = angular_velocity
+        self.sfb_prime = sfb_prime
+        self.sfc_prime = sfc_prime
+        self.idler = idler
+
+        # Derived geometry (directly computed from required inputs)
+        self.pitch_diameter = self.module * self.num_teeth
+        self.diametral_pitch = 1 / self.module
+        self.circular_pitch = math.pi * self.module
+        self.base_pitch = self.circular_pitch * math.cos(math.radians(self.pressure_angle))
+
         self.tooth_type = "full-depth"
 
-        self.sfb_prime = None
-        self.rho = 0
-        self.volume = None
-        self.mass = None       
-        #addendum based on Table 12-1: AGMA Full-Depth Gear Tooth Specs
-        
-    def self_autofill_values(self): 
-        """
-        Attempts to fill missing/unspecified attributes based on known relations between parameters. Should be run multiple times to allow filled values to propagate.
-        Implemented so far:
-            -> Determine pitch_diameter given (Pc,N), (Pd,N), (m,d)
-            -> Determine num_teeth given (Pc,d), (Pd,d), (d,m)
-            -> Determine circular_pitch given (d,N)
-            -> Determine base_pitch given (Pc, phi)
-            -> Determine diametral_pitch given (Pc), (m)
-            -> Determine module given (d,N), (Pd)
-            -> Determine addendum given (Pd)
-            -> Determine dedendum given (Pd)
-            -> Determine pressure_angle given (Pc, phi)
-        """
-        
-        #attempting to autofill pitch_diameter (d)
-        if self.pitch_diameter == None:
-            try: self.pitch_diameter = self.circular_pitch * self.num_teeth / math.pi       #from circular pitch (Pc=pi*d/N -> d=Pc*N/pi)
-            except TypeError:
-                try: self.pitch_diameter = self.num_teeth / self.diametral_pitch            #from diametral pitch (Pd=N/d -> d=N/Pd)
-                except TypeError:
-                    try: self.pitch_diameter = self.module * self.num_teeth                 #from module (m=d/N => d=m*N)
-                    except TypeError:
-                        print("Unable to calculate pitch diameter!")
-    
-        #attempting to autofill num_teeth
-        if self.num_teeth == None:
-            try: self.num_teeth = math.pi * self.pitch_diameter / self.circular_pitch                       #from circular pitch (Pc=pi*d/N -> N=pi*d/Pc)
-            except TypeError:
-                try: self.num_teeth = self.pitch_diameter * self.diametral_pitch                            #from diametral pitch (Pd=N/d => N = Pd*d)
-                except TypeError:
-                    try: self.num_teeth = self.pitch_diameter / self.module                                 #from module (m=d/N => N=d/m)    
-                    except TypeError:
-                        print("Unable to calculate teeth number!")
-        
-        #attempting to autofill circular_pitch
-        if self.circular_pitch == None:
-            try: self.circular_pitch = (math.pi * self.pitch_diameter)/self.num_teeth                       #Pc=pi*d/N
-            except TypeError:
-                try: self.circular_pitch = self.base_pitch/math.cos(math.radians(self.pressure_angle))      #From base pitch (Pb=Pc*cos(phi))
-                except TypeError:
-                    try: self.circular_pitch = math.pi/self.diametral_pitch                                 #From diametral pitch Pd=pi/Pc
-                    except TypeError:
-                        print("Unable to calculate circular pitch!")
-        
-        #attempting to autofill base pitch
-        if self.base_pitch == None:
-            try: self.base_pitch = self.circular_pitch * math.cos(math.radians(self.pressure_angle))          #Pb=Pc*cos(phi)
-            except TypeError:
-                print("Unable to calculate base pitch!")
-        
-        #attempting to autofill diametral pitch
-        if self.diametral_pitch == None:
-            try: self.diametral_pitch = self.num_teeth/self.pitch_diameter                                  #Pd=N/d
-            except TypeError:
-                try: self.diametral_pitch = math.pi/self.circular_pitch                                     #from circular pitch (Pd=pi/Pc)
-                except TypeError:
-                    try: self.diametral_pitch = 1/self.module                                               #from module (Pd=1/m)
-                    except TypeError:
-                        print("Unable to calculate diametral pitch!")
-                
-        #attempting to autofill module
-        if self.module == None:
-            try: self.module = self.pitch_diameter/self.num_teeth                                           #m=d/N
-            except TypeError:
-                try: self.module = 1/self.diametral_pitch                                                   #m=1/Pd
-                except TypeError:
-                    print("Unable to calculate module!")
-                
-        #attempting to autofill addendum        
-        if self.addemdum == None:
-            try: self.module = self.addendum = 1/self.diametral_pitch                                           
-            except TypeError:
-                print("Unable to calculate addendum!")  
-
-        #attempting to autofill dedendum
-        if self.dedendum == None:
-            try: self.module = self.dedendum = 1.25/self.diametral_pitch                                           
-            except TypeError:
-                print("Unable to calculate dedendum!")        
-                
-        #attempting to autofill pressure angle
-        if self.pressure_angle == None:
-            try: self.pressure_angle = math.degrees(math.acos(self.base_pitch/self.circular_pitch))         #Pb = Pc * cos(phi)
-            except TypeError:
-                print("Unable to autofill pressure angle! (invalid base pitch or circular pitch)")
-            
-        #angvel?
         
     def check_undercutting(self):
         if self.num_teeth < 2/math.sin(math.radians(self.pressure_angle)):
-            print("number of teeth is under the minimum number of full-depth teeth! Undercutting will occur.")
+            raise ValueError("number of teeth is under the minimum number of full-depth teeth! Undercutting will occur.")
         
     def calculate_perturbed_pressure_angle(self, pitch_radii_perturbation_percentage):
         try:
@@ -175,101 +78,210 @@ class gear:
             else: print("Fine Pitch")
         except: pass
 
-    def meshwith(self, gear2):
-        #self.velocityRatio(secondGear) = self.num_teeth/secondGear.num_teeth
-        #self.lengthOfAction(secondGear) = self.
-        self.centerDistance = self.pitch_diameter + gear2.pitch_diameter
-        pass
-
-    def Sfb(self):
-        pass
+    def calc_tangential_load(self):
+            return 2*self.torque/self.pitch_diameter
     
-    def Sfc(self):
-        pass
-
-    def get_face_widthFactor():
-        pass
-
-
     @staticmethod
-    def calc_bending_strength_factor(gear: "gear", pinion: "gear",load_condition="tip loading") -> tuple:
+    def calc_J(pinion_obj: "gear", gear_obj: "gear", load_condition="HPSTC") -> tuple:
         # Assuming Full-Depth Teeth with HPSTC Loading
 
-        if not isinstance(gear, gear) or not isinstance(pinion, gear):
+        if not isinstance(gear_obj, gear) or not isinstance(pinion_obj, gear):
             raise ValueError("Both gear and pinion must be instances of the Gear class.")
         
-        if gear.num_teeth < pinion.num_teeth:
-            raise ValueError("First input must be the gear, which has more teeth than the pinion.")
-        # Could change this so that the order does not matter
-        # Optionally make a check for the minimum number of teeth to prevent undercutting
-        if gear.pressure_angle != pinion.pressure_angle:
+        if gear_obj.num_teeth < pinion_obj.num_teeth:
+            raise ValueError("First input must be the pinion, which has less teeth than the gear.")
+
+        if gear_obj.pressure_angle != pinion_obj.pressure_angle:
             raise ValueError("Both gear and pinion must have the same pressure angle.")
         
-        table = J_table[pinion.tooth_type][load_condition]["pinion"]
-        J_pinion = interpolate_table_dimensions(table["pinion"], pinion.num_teeth)
-        J_gear = interpolate_table_dimensions(table["gear"], gear.num_teeth)
+        if gear_obj.module != pinion_obj.module:
+            raise ValueError("Both gear and pinion must have the same module.")
 
-        return (J_pinion, J_gear)
+        load_condition_map = {
+            "HPSTC loading": "HPSTC",
+            "HPSTC": "HPSTC",
+            "tip loading": "tip loading",
+        }
+        tooth_type_map = {
+            "full-depth": "full depth",
+            "full depth": "full depth",
+        }
 
+        normalized_load = load_condition_map.get(load_condition, load_condition)
+        normalized_tooth_type = tooth_type_map.get(pinion_obj.tooth_type, pinion_obj.tooth_type)
 
-    '''
-        if gear.pressure_angle == 20:
-            J_table = J_table_20degrees
-            vals = J_table.get((pinion.num_teeth, gear.num_teeth))
-            if vals is None:
-                raise ValueError("Invalid combination of teeth numbers for 20 degree pressure angle.")
-            return vals
-        
-        elif gear.pressure_angle == 25:
-            J_table = J_table_25degrees
-            vals = J_table.get((pinion.num_teeth, gear.num_teeth))
-            if vals is None:
-                raise ValueError("Invalid combination of teeth numbers for 25 degree pressure angle.")
-            return vals
-    '''
+        try:
+            table = J_table[pinion_obj.pressure_angle][normalized_tooth_type][normalized_load]
+        except KeyError as exc:
+            raise KeyError(
+                "Unable to locate J_table selection for "
+                f"pressure_angle={pinion_obj.pressure_angle}, "
+                f"tooth_type='{normalized_tooth_type}', "
+                f"load_condition='{normalized_load}'."
+            ) from exc
 
-
-
-
+        return interpolate_table_2tuple_tuple(table, (pinion_obj.num_teeth, gear_obj.num_teeth))
     
-    @staticmethod
-    def surface_geometry_factor(pinion: "gear", gear: "gear"):
-        pitch_d,pitch_r,dp,phi = float(),float(),float(),float()        
-        
+    def calc_ka(self):
+        return 1.0 #assume smooth driven and driving machine
+    
+    def calc_km(self):
+        table = face_factor
+        face_width = self.face_width
+
+        if face_width is None:
+            raise ValueError("face_width must be specified to calculate Km.")
+
+        bounds = tuple(table)
+        low_bound = bounds[0]
+        high_bound = bounds[-1]
+
+        if face_width <= low_bound:
+            return table[low_bound]
+        if face_width >= high_bound:
+            return table[high_bound]
+
+        for i in range(1, len(bounds)):
+            upper = bounds[i]
+            if face_width <= upper:
+                lower = bounds[i - 1]
+                lower_value = table[lower]
+                upper_value = table[upper]
+                ratio = (face_width - lower) / (upper - lower)
+                return lower_value + ratio * (upper_value - lower_value)
+            
+    
+    def calc_kv(self):
+        #k_v = (A/(A+sqrt(200v)))^B
+        B = ((12 - self.quality_index)**(2/3)) / 4
+        A = 50 + 56*(1-B)
+        v = (self.pitch_diameter/2) * self.angular_velocity #m/s
+        return (A/(A+np.sqrt(200*v)))**B
+    
+    def calc_kb(self):
+        return 1.0 #assume solid gear
+    
+    def calc_ks(self):
+        return 1.0 #assume no size effect
+    
+    def calc_ki(self):
+        if self.idler == True:
+            return 1.42
+        else:
+            return 1.0
+    
+    def calc_bending_stress(self, *, other_gear: "gear"):
+        tangential_load = self.calc_tangential_load()
+        if self.num_teeth < other_gear.num_teeth:
+            pinion = self
+            gear = other_gear
+            J = self.calc_J(pinion_obj=pinion, gear_obj=gear)[0] 
+        else:            
+            pinion = other_gear
+            gear = self
+            J = self.calc_J(pinion_obj=pinion, gear_obj=gear)[1]
+        ka = self.calc_ka()
+        km = self.calc_km()
+        kv = self.calc_kv()
+        kb = self.calc_kb()
+        ks = self.calc_ks()
+        ki = self.calc_ki()
+        return tangential_load * ka * km *  kb * ks * ki / (self.face_width * kv * self.module * J)
+
+
+    def surface_geometry_factor(self, *, other_gear: "gear"):  
+        if self.num_teeth < other_gear.num_teeth:
+            pinion = self
+            gear = other_gear
+        else:            
+            pinion = other_gear
+            gear = self
+
         dp = pinion.pitch_diameter
-        rp = pitch_d / 2
+        rp = dp / 2
         pd = pinion.diametral_pitch
         phi = pinion.pressure_angle
         C = rp + gear.pitch_diameter / 2
 
-        radius_pinion = ((pitch_r + 1 / pd) ** 2 - (pitch_r * np.cos(phi))) ** 0.5 - np.pi / pd * np.cos(phi)
-        radius_gear = C * np.sin(phi) - radius_pinion
+        radius_pinion = ((rp + 1 / pd) ** (2) - (rp * np.cos(np.radians(phi))) ** (2)) ** (0.5) - np.pi / pd * np.cos(np.radians(phi))
+        radius_gear = C * np.sin(np.radians(phi)) - radius_pinion
 
-        return np.cos(phi) / ((1 / radius_pinion + 1 / radius_gear) * dp)
-
-def meshgears(gear1, gear2, displayInfo=False):
-    gear1.meshwith(gear2)
-    gear2.meshwith(gear1)
+        return np.cos(np.radians(phi)) / ((1 / radius_pinion + 1 / radius_gear) * dp)
     
-    if displayInfo:
-        print("Gear info: \n**********")
-        gear1.info()
-        gear2.info()
+    def calc_elastic_coefficient(self):
+        return 191e3 #Pa, for steel. This is a placeholder, as we have not yet implemented material selection for gears. We will assume all gears are made of steel for now.
+    
+    def calc_surface_stress(self, *, other_gear: "gear"):
+        tangential_load = self.calc_tangential_load()
+        if self.num_teeth < other_gear.num_teeth:
+            pinion = self
+            gear = other_gear
+        else:            
+            pinion = other_gear
+            gear = self        
+        I = self.surface_geometry_factor(other_gear=other_gear)
+        Cp = self.calc_elastic_coefficient()
+        ka = self.calc_ka()
+        km = self.calc_km()
+        kv = self.calc_kv()
+        ks = self.calc_ks()
 
-'''
-#Testing: Example 12-1 (at the end of Lecture 11)
+        return Cp * np.sqrt(tangential_load * ka * km *  ks / (self.face_width * kv * I * pinion.pitch_diameter))
+    
+    def calc_KR(self):
+        return 1.0 # We assume that we need a reliability of 99%.
+    
+    def calc_KT(self):
+        return 1.0 # We assume that we are not applying any temperature derating to the gear.
+    
+    def calc_KL(self):
+        return 1.0 # Assume life of 10^7 cycles. 
 
-gear1 = gear(name=None, 
-             pitch_diameter=None, num_teeth=19, pressure_angle=20,
-             circular_pitch=None, base_pitch=None, diametral_pitch=6, module=None,
-             addendum=None, dedendum=None,
-             face_width=None, quality_index=None)
+    def calc_Sfb(self):
+        return self.sfb_prime * self.calc_KL() / (self.calc_KR() * self.calc_KT())
+    
+    def calc_CH(self):
+        return 1.0 # Assume same material for pinion and gear.
+    
+    def calc_Sfc(self):
+        return self.sfc_prime * self.calc_CH() * self.calc_KL() / (self.calc_KR() * self.calc_KT())
+    
+    def calc_bending_factor_of_safety(self, other_gear: "gear"):
+        bending_stress = self.calc_bending_stress(other_gear=other_gear)
+        Sfb = self.calc_Sfb()
+        return Sfb / bending_stress 
+    
+    def calc_surface_factor_of_safety(self, other_gear: "gear"):
+        Sfc = self.calc_Sfc()
+        surface_stress = self.calc_surface_stress(other_gear=other_gear)
+        return (Sfc / surface_stress) ** 2
+    
+    def calc_factor_of_safety(self, other_gear: "gear"):
+        bending_fos = self.calc_bending_factor_of_safety(other_gear=other_gear)
+        surface_fos = self.calc_surface_factor_of_safety(other_gear=other_gear)
+        return bending_fos, surface_fos
+    
 
 
 
-for i in range(5):
-    print(i)
-    gear1.self_autofill_values()
-    gear1.info()
-'''
+if __name__ == "__main__":
+    # Example 12-5 from lecture slides:
+    pinion = gear(module = 4.23e-3, num_teeth = 14, face_width=50.8e-3, quality_index=6, pressure_angle=25, 
+                  torque=56.9, angular_velocity=261.8, sfb_prime=2.886e8, sfc_prime=813581361)
+    idler = gear(module = 4.23e-3, num_teeth = 17, face_width=50.8e-3, quality_index=6, pressure_angle=25, 
+                  torque=56.9*17/14, angular_velocity=261.8*14/17, sfb_prime=2.886e8, sfc_prime=813581361, idler=True)
+    gear_ = gear(module = 4.23e-3, num_teeth = 49, face_width=50.8e-3, quality_index=6, pressure_angle=25, 
+                  torque=56.9*49/14, angular_velocity=261.8*14/49, sfb_prime=2.886e8, sfc_prime=813581361)
+    # print(pinion.calc_bending_stress(other_gear=idler)) # Correct
+    # print(idler.calc_bending_stress(other_gear=pinion)) # Correct
+    # print(gear_.calc_bending_stress(other_gear=idler)) #Correct. Close within 5%
 
+    # Example 12-6 from lecture slides:
+    # print(pinion.calc_surface_stress(other_gear=idler)) # Correct. Close within 2%
+    # print(idler.calc_surface_stress(other_gear=pinion)) # Correct. Close within 2%.
+    # print(gear_.calc_surface_stress(other_gear=idler)) # Correct. Close within 2%.
+
+    #Example 12-7 from lecture slides:
+    print(pinion.calc_factor_of_safety(other_gear=idler)) # Correct. Close within 5%
+    print(idler.calc_factor_of_safety(other_gear=pinion)) # Correct.
+    print(gear_.calc_factor_of_safety(other_gear=idler)) # Correct. Close within 5%
