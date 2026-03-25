@@ -65,13 +65,13 @@ class baseStressCalculator:
         Returns:
             float: The shear stress.
         """            
-        if not isinstance(load,(float, int)) and isinstance(diameter,(float, int)):
+        if not (isinstance(load,(float, int)) and isinstance(diameter,(float, int))):
             raise TypeError("The load and diameter entered must be numerical values.")
         J0 = np.pi * diameter ** 4 / 32
         if is_torque == True:
-            return load * diameter / J0
+            return load * diameter / 2 / J0
         elif is_torque == False:
-            return load * diameter ** 2 / J0
+            return load * (diameter/2) ** 2 / J0
         else:
             raise TypeError("The optional parameter is_torque must be of type bool.")
 
@@ -139,7 +139,7 @@ class baseStressCalculator:
         Returns:
             float: the von Mises equivalent stress.
         """        
-        if tensor != tensor.T:
+        if not np.array_equal(tensor, tensor.T):
             raise ValueError("The input stress tensor is non-symmetric and therefore represents a transient system")
         dimensions = tensor.shape
         if len(dimensions) != 2:

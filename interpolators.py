@@ -1,5 +1,8 @@
 import numpy as np
 
+def rcl(num):
+    return 1 / num if num != 0 else "undefined"
+
 def interpolate_table_dimensions(table: dict, table_key: float):
     """Interpolates between the dimensionss stored in a dictionary, given that the dimensionss are of num type.
     Assumes the keys are increasing, such that the first key is of the lowest numerical dimensions.
