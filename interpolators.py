@@ -3,7 +3,7 @@ import numpy as np
 def rcl(num):
     return 1 / num if num != 0 else "undefined"
 
-def interpolate_table_dimensions(table: dict, table_key: float):
+def interpolate_table_dimensions(table: dict, table_key: float) -> float | int:
     """Interpolates between the dimensionss stored in a dictionary, given that the dimensionss are of num type.
     Assumes the keys are increasing, such that the first key is of the lowest numerical dimensions.
 
@@ -13,7 +13,7 @@ def interpolate_table_dimensions(table: dict, table_key: float):
     """
     selection = list(table.keys())
     error_message = "The input table_key is not within the bounds of the dictionary keys, being " + str(selection[0]) + "and" + str(selection[-1]) + "."
-    a = float
+    a = 0
     if table_key < selection[0] or table_key > selection[-1]:
             raise ValueError(error_message)
     for index in range(1,len(selection)):
@@ -23,7 +23,7 @@ def interpolate_table_dimensions(table: dict, table_key: float):
         elif table_key < selection[index]:
             xp = [selection[index],selection[index-1]]
             fp = [table[i] for i in xp]
-            a = float(np.interp(table_key,xp,fp))
+            a = fp[0] + (fp[0] - fp[1]) * (table_key - xp[1]) / (xp[0] - xp[1])
             break
     return a
 
@@ -40,7 +40,7 @@ def interpolate_table_tuple_pair(table: dict, table_key: float):
     """
     selection = list(table.keys())
     error_message = f"The input table_key is not within the bounds of the dictionary keys, being {selection[0]} and {selection[-1]}."
-    a, b = float(), float()
+    a, b = 0, 0
     for index in range(len(selection)):
         if table_key > selection[0] or table_key < selection[-1]:
             raise ValueError(error_message)

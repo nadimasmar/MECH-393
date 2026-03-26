@@ -88,9 +88,9 @@ class Shaft:
         if axial_pos > self.length or axial_pos < 0:
             raise ValueError("The axial position of the stress concentration exceeds the length of the shaft.")
 
-        isgroove = bool
-        initial_d = float
-        final_d = float
+        isgroove = False
+        initial_d = 0
+        final_d = 0
 
         keys, values = zip(*self.diameter.items()) # Saw this trick online
 
@@ -103,7 +103,6 @@ class Shaft:
                     final_d = initial_d
                     break
             elif axial_pos == keys[index]:
-                isgroove = False
                 initial_d = values[index-1]
                 final_d = values[index]
                 break
@@ -379,5 +378,39 @@ class Shaft:
 
         Nf = GoodmanSafetyFactorCalculator.calc_safety_factor_case_2(Sf,self.Sut,alternating_stress,mean_stress)
     
-def iterate_diameter():
-    return "something"
+    def force_balance(self, 
+                      bearing_pos1: float | int, 
+                      bearing_pos2: float | int, 
+                      gear_pos1 : float | int, 
+                      gear_pos2 : float | int, 
+                      radial_gear_force: float | int = 0):
+        """Determines the reaction forces of the shaft at different positions. Assumes 
+        that the center of gravity is at the half length of the shaft (ergo balanced around
+        its half length). 
+
+        Args:
+            bearing_pos1 (num): The position of the first supporting bearing.
+            bearing_pos2 (num): The position of the second supporting bearing.
+            gear_pos1 (num): The position of the first assembled gear
+            gear_pos2 (num): The position of the second assembled gear
+            radial_gear_force (num ): The radial force applied by a gear.
+
+        Returns:
+            list: list of 3-tuples containing the forces, their positions, and 
+            their axial alignments.
+
+        MUST ACCOUNT FOR THE MASS OF SHAFT COMPONENTS.
+        """
+
+        weight, length = self.mass * 9.81, self.length
+        Rb = weight * (length / 2 - bearing_pos1) / (bearing_pos2 - bearing_pos1)
+        Ra = weight - Rb
+
+        forces = [Rb, Ra, radial_gear_force, -radial_gear_force]
+        position = [bearing_pos1, bearing_pos2, gear_pos1, gear_pos2]
+        alignment = ["vertical", "vertical", "horizontal", "horizontal"]           
+
+        return zip(forces, position, alignment)
+    
+    def shear_moment_diagram(self):
+        return None

@@ -71,7 +71,7 @@ class gear:
     def info(self):
         for attr, value in self.__dict__.items():
             if value != None: print(f"{attr}: {value}")
-        print("\n")
+            print("\n")
         
         try:
             if self.diametral_pitch < 20: print("Coarse Pitch")
@@ -126,6 +126,8 @@ class gear:
         return 1.0 #assume smooth driven and driving machine
     
     def calc_km(self):
+        return interpolate_table_dimensions(face_factor, self.face_width)
+        '''
         table = face_factor
         face_width = self.face_width
 
@@ -148,7 +150,7 @@ class gear:
                 lower_value = table[lower]
                 upper_value = table[upper]
                 ratio = (face_width - lower) / (upper - lower)
-                return lower_value + ratio * (upper_value - lower_value)
+                return lower_value + ratio * (upper_value - lower_value)'''
             
     
     def calc_kv(self):
