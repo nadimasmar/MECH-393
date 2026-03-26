@@ -282,6 +282,17 @@ if __name__ == "__main__":
     # print(gear_.calc_surface_stress(other_gear=idler)) # Correct. Close within 2%.
 
     #Example 12-7 from lecture slides:
-    print(pinion.calc_factor_of_safety(other_gear=idler)) # Correct. Close within 5%
-    print(idler.calc_factor_of_safety(other_gear=pinion)) # Correct.
-    print(gear_.calc_factor_of_safety(other_gear=idler)) # Correct. Close within 5%
+    # print(pinion.calc_factor_of_safety(other_gear=idler)) # Correct. Close within 5%
+    # print(idler.calc_factor_of_safety(other_gear=pinion)) # Correct.
+    # print(gear_.calc_factor_of_safety(other_gear=idler)) # Correct. Close within 5%
+
+    #Project Calcualtions
+pinion = gear(module = 3.0e-3, num_teeth = 26, face_width=50.0e-3, quality_index=11, pressure_angle=20, 
+                  torque=157.3, angular_velocity=178.02, sfb_prime=450e6, sfc_prime=1500e6)
+gear_ = gear(module = 3.0e-3, num_teeth = 62, face_width=50.0e-3, quality_index=11, pressure_angle=20, 
+                  torque=157.3*62/26, angular_velocity=178.02*26/62, sfb_prime=450e6, sfc_prime=1500e6)
+
+print(pinion.calc_factor_of_safety(other_gear=gear_)) 
+print(gear_.calc_factor_of_safety(other_gear=pinion))
+
+
