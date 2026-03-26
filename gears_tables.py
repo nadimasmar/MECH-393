@@ -159,7 +159,7 @@ J_table = {
 }
 
 def dynamic_factor(quality: int, pitch_vel: float):
-    Kv = float()
+    Kv = float
     Qv = quality
     assert Qv <= 12, "Very accurate gearing is outside the scope of this project"
     if Qv <= 5:
