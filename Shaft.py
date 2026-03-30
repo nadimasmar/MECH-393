@@ -4,9 +4,10 @@ import numpy as np
 from Goodman_safety_factor_calculator import *
 from Fatigue_strength_calculator import *
 from baseStressCalculator import *
-from beambending import beam
+#from beambending import beam
 from interpolators import *
-from Keys import *
+from keys import *
+import matplotlib.pyplot as plt
 
 ''' All values in SI units (mm, N, etc.), and keys are assumed to be
 rectangular parallel keys, unless otherwise specified.'''
@@ -88,9 +89,9 @@ class Shaft:
         if axial_pos > self.length or axial_pos < 0:
             raise ValueError("The axial position of the stress concentration exceeds the length of the shaft.")
 
-        isgroove = False
-        initial_d = 0
-        final_d = 0
+        isgroove = bool
+        initial_d = float
+        final_d = float
 
         keys, values = zip(*self.diameter.items()) # Saw this trick online
 
@@ -103,6 +104,7 @@ class Shaft:
                     final_d = initial_d
                     break
             elif axial_pos == keys[index]:
+                isgroove = False
                 initial_d = values[index-1]
                 final_d = values[index]
                 break
@@ -328,8 +330,99 @@ class Shaft:
         mass = vol * self.rho
         self.mass = round(mass, 5)
 
-    def get_shear_moment_diagrams(self):
-        return 0
+
+    def get_shear_at(self, x: float) -> float:
+        """
+        Calculates the internal shear force at a specific axial position x.
+        """
+        if x < 0 or x > self.length:
+            raise ValueError("Position x is outside the shaft boundaries.")
+            
+        shear = 0.0
+        
+        # 1. Point load contributions (forces at or to the left of x)
+        for axial_pos, force in self.point_loads:
+            if axial_pos <= x:
+                shear += force
+                
+        # 2. Distributed load contributions
+        for start, end, mag in self.distributed_loads:
+            if start < x:
+                # Determine how much of the distributed load is to the left of x
+                effective_end = min(x, end)
+                loaded_length = effective_end - start
+                shear += mag * loaded_length
+                
+        return shear
+
+    def get_moment_at(self, x: float) -> float:
+        """
+        Calculates the internal bending moment at a specific axial position x.
+        """
+        if x < 0 or x > self.length:
+            raise ValueError("Position x is outside the shaft boundaries.")
+            
+        moment = 0.0
+        
+        # 1. Point load moment contributions (Force * distance to x)
+        for axial_pos, force in self.point_loads:
+            if axial_pos <= x:
+                moment += force * (x - axial_pos)
+                
+        # 2. Distributed load moment contributions
+        for start, end, mag in self.distributed_loads:
+            if start < x:
+                effective_end = min(x, end)
+                loaded_length = effective_end - start
+                
+                # Treat the truncated distributed load as a point force at its centroid
+                force_resultant = mag * loaded_length
+                centroid = start + (loaded_length / 2.0)
+                
+                # Moment is the resultant force multiplied by the lever arm to x
+                moment += force_resultant * (x - centroid)
+                
+        return moment
+
+    def plot_shaft_diagrams(self, num_points=1000):
+        """
+            Generates and displays the Shear Force and Bending Moment diagrams 
+            for a given Shaft object using its internal evaluation methods.
+            
+            Args:
+                beam (Shaft): The initialized shaft object with loaded forces.
+                num_points (int): The resolution of the evaluation arrays.
+        """
+        # 1. Generate the array of x-coordinates
+        x_vals = np.linspace(0, self.length, num_points)
+        
+        # 2. Calculate Shear (V) and Moment (M) at every x-coordinate
+        # Using list comprehensions to call the beam's internal methods
+        V_vals = np.array([self.get_shear_at(x) for x in x_vals])
+        M_vals = np.array([self.get_moment_at(x) for x in x_vals])
+        
+        # 3. Initialize the matplotlib figure with two stacked subplots
+        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8), sharex=True)
+        
+        # 4. Plot Shear Force Diagram (SFD)
+        ax1.plot(x_vals, V_vals, color='blue', linewidth=2)
+        ax1.fill_between(x_vals, V_vals, 0, color='blue', alpha=0.2)
+        ax1.axhline(0, color='black', linewidth=1)
+        ax1.set_ylabel('Shear Force V')
+        ax1.set_title('Shear Force Diagram')
+        ax1.grid(True, linestyle='--', alpha=0.7)
+        
+        # 5. Plot Bending Moment Diagram (BMD)
+        ax2.plot(x_vals, M_vals, color='red', linewidth=2)
+        ax2.fill_between(x_vals, M_vals, 0, color='red', alpha=0.2)
+        ax2.axhline(0, color='black', linewidth=1)
+        ax2.set_xlabel('Position x')
+        ax2.set_ylabel('Bending Moment M')
+        ax2.set_title('Bending Moment Diagram')
+        ax2.grid(True, linestyle='--', alpha=0.7)
+        
+        plt.tight_layout()
+        plt.show()
 
     def min_diameter_equation(self, 
                               safety_factor: float, 
@@ -377,7 +470,9 @@ class Shaft:
         mean_stress = baseStressCalculator.von_mises_equivalent(mean_tensor)
 
         Nf = GoodmanSafetyFactorCalculator.calc_safety_factor_case_2(Sf,self.Sut,alternating_stress,mean_stress)
+        return Nf
     
+
     def force_balance(self, 
                       bearing_pos1: float | int, 
                       bearing_pos2: float | int, 
@@ -414,3 +509,10 @@ class Shaft:
     
     def shear_moment_diagram(self):
         return None
+
+
+
+
+    
+def iterate_diameter():
+    return "something"
