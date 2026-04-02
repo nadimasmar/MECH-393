@@ -1,0 +1,9 @@
+# Install options:
+# (venv)   python -m venv venv && source venv/bin/activate && pip install -r requirements.txt
+# (system) pip install -r requirements.txt
+# (conda)  conda create -n mech309 python=3.11 numpy pandas matplotlib requests && conda activate mech309
+
+numpy>=1.24
+pandas>=2.0
+matplotlib>=3.7
+requests>=2.31
