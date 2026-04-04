@@ -50,6 +50,7 @@ class gear:
         self.diametral_pitch = 1 / self.module
         self.circular_pitch = math.pi * self.module
         self.base_pitch = self.circular_pitch * math.cos(math.radians(self.pressure_angle))
+        self.volume = math.pi * (self.pitch_diameter/2)**2 * self.face_width 
 
         self.tooth_type = "full-depth"
 
@@ -286,12 +287,44 @@ if __name__ == "__main__":
     # print(gear_.calc_factor_of_safety(other_gear=idler)) # Correct. Close within 5%
 
     #Project Calcualtions
-pinion = gear(module = 3.0e-3, num_teeth = 26, face_width=50.0e-3, quality_index=11, pressure_angle=20, 
-                  torque=157.3, angular_velocity=178.02, sfb_prime=450e6, sfc_prime=1500e6)
-gear_ = gear(module = 3.0e-3, num_teeth = 62, face_width=50.0e-3, quality_index=11, pressure_angle=20, 
-                  torque=157.3*62/26, angular_velocity=178.02*26/62, sfb_prime=450e6, sfc_prime=1500e6)
 
-print(pinion.calc_factor_of_safety(other_gear=gear_)) 
-print(gear_.calc_factor_of_safety(other_gear=pinion))
+# ===== PARAMETERS =====
+# Stage 1
+m1, z_p1, z_g1, b1 = 3.0e-3, 26, 62, 36.0e-3
+
+# Stage 2
+m2, z_p2, z_g2, b2 = 3.5e-3, 28, 67, 56.0e-3
+
+# Constants
+Qv, phi = 11, 20
+T_in, w_in = 157.3, 178.02
+sfb_prime, sfc_prime = 450e6, 1500e6 #Steel 2.5% Chrome Nitrided.  P.770 from textbook
 
 
+# ===== FIRST STAGE =====
+pinion_1 = gear(module=m1, num_teeth=z_p1, face_width=b1, quality_index=Qv, pressure_angle=phi,
+                torque=T_in, angular_velocity=w_in, sfb_prime=sfb_prime, sfc_prime=sfc_prime)
+
+gear_1 = gear(module=m1, num_teeth=z_g1, face_width=b1, quality_index=Qv, pressure_angle=phi,
+              torque=T_in*z_g1/z_p1, angular_velocity=w_in*z_p1/z_g1, sfb_prime=sfb_prime, sfc_prime=sfc_prime)
+
+print(pinion_1.calc_factor_of_safety(other_gear=gear_1))
+print(gear_1.calc_factor_of_safety(other_gear=pinion_1))
+print("")
+
+
+# ===== SECOND STAGE =====
+pinion_2 = gear(module=m2, num_teeth=z_p2, face_width=b2, quality_index=Qv, pressure_angle=phi,
+                torque=T_in*z_g1/z_p1, angular_velocity=w_in*z_p1/z_g1, sfb_prime=sfb_prime, sfc_prime=sfc_prime)
+
+gear_2 = gear(module=m2, num_teeth=z_g2, face_width=b2, quality_index=Qv, pressure_angle=phi,
+              torque=T_in*(z_g1/z_p1)*(z_g2/z_p2),
+              angular_velocity=w_in*(z_p1/z_g1)*(z_p2/z_g2),
+              sfb_prime=sfb_prime, sfc_prime=sfc_prime)
+
+print(pinion_2.calc_factor_of_safety(other_gear=gear_2))
+print(gear_2.calc_factor_of_safety(other_gear=pinion_2))
+print("")
+
+print(f"{w_in*(z_p1/z_g1)*(z_p2/z_g2)*60/(2*np.pi)} rpm")
+print(f"{(pinion_1.volume + gear_1.volume + pinion_2.volume + gear_2.volume) * 1e6} cm^3")
