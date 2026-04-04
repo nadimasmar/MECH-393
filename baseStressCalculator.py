@@ -124,13 +124,19 @@ class baseStressCalculator:
         return 4 * shear / (3 / 4* np.pi * diameter ** 2)
 
     @staticmethod
-    def von_mises_equivalent(tensor: np.ndarray):
+    def von_mises_equivalent(sigma_x: float | int,
+                             sigma_y: float | int,
+                             sigma_z: float | int,
+                             tau_xy: float | int,
+                             tau_xz: float | int,
+                             tau_yz: float | int
+                             ):
         """Calcualates the von Mises equivalent stress of a stress tensor. If the stress is oscillating 
         at steady-state, such as in an fully-reversed fatigue state, simply compose a stress tensor of 
         the alternating and mean stress components and call the function for each.
 
         Args:
-            tensor (np.ndarray): A tensor of order 2 as a numpy array representing the stress state of the system.
+            The triangular elements of the stress tensor at the given state.
 
         Raises:
             ValueError: Evaluates the necessary symmetry of <tensor>
@@ -138,13 +144,7 @@ class baseStressCalculator:
 
         Returns:
             float: the von Mises equivalent stress.
-        """        
-        if not np.array_equal(tensor, tensor.T):
-            raise ValueError("The input stress tensor is non-symmetric and therefore represents a transient system")
-        dimensions = tensor.shape
-        if len(dimensions) != 2:
-            raise TypeError("The input tensor must of second order")
-        sigma_x, tau_xy, tau_xz, sigma_y, tau_yz, sigma_z = tensor.reshape([9])[0:6]
+        """
         sigma_prime = np.sqrt(0.5 * ((sigma_x - sigma_y) ** 2 + (sigma_x - sigma_z) ** 2 + (sigma_y - sigma_z) ** 2) + 
                               3 * (tau_xy ** 2 + tau_xz ** 2 + tau_yz ** 2))
         return float(sigma_prime)

@@ -29,9 +29,9 @@ class Shaft:
         self._keyways = dict()
         self.rotating = False
         self.ang_speed = None
-        self.point_loads = set()
-        self.torque = float
-        self.distributed_loads = set() # This should be standardized as the stresses at x = 0 (maybe, this would zero the 
+        self.point_loads = list()
+        self.torque = float()
+        self.distributed_loads = list() # This should be standardized as the stresses at x = 0 (maybe, this would zero the 
         # moment in shear moment diagram)
 
     def __len__(self):
@@ -46,7 +46,7 @@ class Shaft:
         """Checks if the shaft would be whirling at the nominal angular velocity.
 
         Args:
-            speed (float,int): The speed at which the Shaft is spinning.
+            speed (num): The speed at which the Shaft is spinning.
         """        
         if self.mass == 0:
             self.set_mass_of_shaft()
@@ -65,7 +65,7 @@ class Shaft:
             print(f"The natural frequency is approximately {omega_n}")
             
     
-    def _configure_diameter(self, diameter: float | int):
+    def _configure_diameter(self, diameter: dict | float | int):
         """Configures the variation of diameter along the shaft into a dictionary.
 
         Args:
@@ -331,7 +331,7 @@ class Shaft:
         self.mass = round(mass, 5)
 
 
-    def get_shear_at(self, x: float) -> float:
+    def get_shear_at(self, x: float, axis: str) -> float:
         """
         Calculates the internal shear force at a specific axial position x.
         """
@@ -341,9 +341,10 @@ class Shaft:
         shear = 0.0
         
         # 1. Point load contributions (forces at or to the left of x)
-        for axial_pos, force in self.point_loads:
-            if axial_pos <= x:
-                shear += force
+        for axial_pos, force, alignment in self.point_loads:
+            if alignment == axis:
+                if axial_pos <= x:
+                    shear += force
                 
         # 2. Distributed load contributions
         for start, end, mag in self.distributed_loads:
@@ -355,7 +356,7 @@ class Shaft:
                 
         return shear
 
-    def get_moment_at(self, x: float) -> float:
+    def get_moment_at(self, x: float, axis: str) -> float:
         """
         Calculates the internal bending moment at a specific axial position x.
         """
@@ -365,9 +366,10 @@ class Shaft:
         moment = 0.0
         
         # 1. Point load moment contributions (Force * distance to x)
-        for axial_pos, force in self.point_loads:
-            if axial_pos <= x:
-                moment += force * (x - axial_pos)
+        for axial_pos, force, alignment in self.point_loads:
+            if alignment == axis:
+                if axial_pos <= x:
+                    moment += force * (x - axial_pos)
                 
         # 2. Distributed load moment contributions
         for start, end, mag in self.distributed_loads:
@@ -384,22 +386,22 @@ class Shaft:
                 
         return moment
 
-    def plot_shaft_diagrams(self, num_points=1000):
+    def plot_shaft_diagrams(self, axis, num_points=1000):
         """
             Generates and displays the Shear Force and Bending Moment diagrams 
             for a given Shaft object using its internal evaluation methods.
             
             Args:
-                beam (Shaft): The initialized shaft object with loaded forces.
-                num_points (int): The resolution of the evaluation arrays.
+                axis (str): The Cartesian axis, either "horizontal" or "vertical," against which to plot the diagrams
+                num_points (int, optional): The resolution of the evaluation arrays. Defaults to 1000
         """
         # 1. Generate the array of x-coordinates
         x_vals = np.linspace(0, self.length, num_points)
         
         # 2. Calculate Shear (V) and Moment (M) at every x-coordinate
         # Using list comprehensions to call the beam's internal methods
-        V_vals = np.array([self.get_shear_at(x) for x in x_vals])
-        M_vals = np.array([self.get_moment_at(x) for x in x_vals])
+        V_vals = np.array([self.get_shear_at(x, axis) for x in x_vals])
+        M_vals = np.array([self.get_moment_at(x, axis) for x in x_vals])
         
         # 3. Initialize the matplotlib figure with two stacked subplots
         fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8), sharex=True)
@@ -433,7 +435,21 @@ class Shaft:
                               Sf: float, 
                               Sut: float
                               ):
-        kf, kfs, kfm, kfsm = float, float, float, float
+        """_summary_
+
+        Args:
+            safety_factor (float): _description_
+            T_a (float): _description_
+            T_m (float): _description_
+            M_a (float): _description_
+            M_m (float): _description_
+            Sf (float): _description_
+            Sut (float): _description_
+
+        Returns:
+            _type_: _description_
+        """        
+        kf, kfs, kfm, kfsm = 0, 0, 0, 0
         if len(self._stress_factors) == 0:
             kf, kfs, kfm, kfsm = 1, 1, 1, 1
         else:
@@ -447,14 +463,41 @@ class Shaft:
         return d
 
     def min_diameter(self, torque: float, bending_moment: float, tension: float, safety_factor: float =2.5):
+        """_summary_
+
+        Args:
+            torque (float): _description_
+            bending_moment (float): _description_
+            tension (float): _description_
+            safety_factor (float, optional): _description_. Defaults to 2.5.
+
+        Returns:
+            _type_: _description_
+        """        
         
         dimensions = {"diameter" : min(self.diameter.values())}
         Sf = FatigueStrengthCalculator.calc_corrected_fatigue_strength(
             self.Sut, "steel", "shaft", dimensions, "cold-rolled", "bending", 50, 25)
         d = self.min_diameter_equation(safety_factor,0,torque,bending_moment,tension,Sf,self.Sut)
+        dimensions["diameter"] = d
+        Sf = FatigueStrengthCalculator.calc_corrected_fatigue_strength(
+            self.Sut, "steel", "shaft", dimensions, "cold-rolled", "bending", 50, 25)
+        d = self.min_diameter_equation(safety_factor,0,torque,bending_moment,tension,Sf,self.Sut) # Too lazy to code a while loop right now
         return d
 
     def safety_factor(self, Sf: float, bending_moment: float, gear_moment: float, tension: float, torque: float):
+        """_summary_
+
+        Args:
+            Sf (float): _description_
+            bending_moment (float): _description_
+            gear_moment (float): _description_
+            tension (float): _description_
+            torque (float): _description_
+
+        Returns:
+            _type_: _description_
+        """        
 
         d = min(self.diameter.values())
 
@@ -473,12 +516,19 @@ class Shaft:
         return Nf
     
 
-    def force_balance(self, 
+    def point_load_balance(self, 
                       bearing_pos1: float | int, 
                       bearing_pos2: float | int, 
                       gear_pos1 : float | int, 
                       gear_pos2 : float | int, 
-                      radial_gear_force: float | int = 0):
+                      gear_mass_1: float | int,
+                      gear_mass_2: float | int,
+                      gear_pd_1: float | int,
+                      gear_pd_2: float | int,
+                      gear_phi: float | int,
+                      gear_torque_in: float | int,
+                      shaft_mass: float | int = None
+                      ):
         """Determines the reaction forces of the shaft at different positions. Assumes 
         that the center of gravity is at the half length of the shaft (ergo balanced around
         its half length). 
@@ -486,33 +536,59 @@ class Shaft:
         Args:
             bearing_pos1 (num): The position of the first supporting bearing.
             bearing_pos2 (num): The position of the second supporting bearing.
-            gear_pos1 (num): The position of the first assembled gear
-            gear_pos2 (num): The position of the second assembled gear
-            radial_gear_force (num ): The radial force applied by a gear.
+            gear_pos1 (num): The position of the first assembled gear.
+            gear_pos2 (num): The position of the second assembled gear.
+            gear_mass_1 (num): The mass of the first assembled gear.
+            gear_mass_2 (num): The mass of the second assembled gear.
+            gear_pd_1 (num): The pitch diameter of the first assembled gear.
+            gear_pd_2 (num): The pitch diameter of the second assembled gear.
+            gear_phi (num): The pressure angle of both of the gears.
+            gear_torque_in (num): The torque applied by the input gear.
+            shaft_mass (num, optional): The mass of the shaft if otherwise calculated 
+            more precisely. Defaults to None.
 
         Returns:
             list: list of 3-tuples containing the forces, their positions, and 
             their axial alignments.
 
-        MUST ACCOUNT FOR THE MASS OF SHAFT COMPONENTS.
+        NEED TO RESOLVE DIRECTION OF VECTORS
         """
 
-        weight, length = self.mass * 9.81, self.length
-        Rb = weight * (length / 2 - bearing_pos1) / (bearing_pos2 - bearing_pos1)
-        Ra = weight - Rb
+        # Resolving gear forces and shaft weight
+        # Assuming that the gear train(s) are in the x-z plane
 
-        forces = [Rb, Ra, radial_gear_force, -radial_gear_force]
-        position = [bearing_pos1, bearing_pos2, gear_pos1, gear_pos2]
-        alignment = ["vertical", "vertical", "horizontal", "horizontal"]           
+        tangent_force_1 = gear_torque_in / gear_pd_1
+        tangent_force_2 = -gear_torque_in / gear_pd_2 # conserving moment about x
 
-        return zip(forces, position, alignment)
-    
-    def shear_moment_diagram(self):
-        return None
+        radial_force1 = tangent_force_1 * np.tan(gear_phi)
+        radial_force2 = -tangent_force_2 * np.tan(gear_phi)
+
+        length = self.length
+        S_W = self.mass * 9.81
+        if shaft_mass is not None:
+            S_W = shaft_mass * 9.81 
+        G_W1, G_W2 = gear_mass_1 * 9.81, gear_mass_2 * 9.81
+        
+        # Y-axis reaction forces
+
+        R2y = (S_W * (length / 2 - bearing_pos1) + 
+              (G_W1 + tangent_force_1) * (gear_pos1 - bearing_pos1) + 
+              (G_W2 + tangent_force_2) * (gear_pos2 - bearing_pos1)) / (bearing_pos2 - bearing_pos1)
+        R1y = S_W + G_W1 + G_W2 - R2y
+
+        # X-axis reaction forces
+        
+        R2x = (radial_force1 * (gear_pos1 - bearing_pos1) + 
+               radial_force2 * (gear_pos2 - bearing_pos1)) / (bearing_pos2 - bearing_pos1)
+        R1x = R2x - radial_force1 - radial_force2
+
+        point_forces = [R2y, R1y, R2x, R1x, radial_force1, radial_force2, G_W1, G_W2]
+        positions = [bearing_pos2, bearing_pos1, bearing_pos2, bearing_pos1, gear_pos1, gear_pos2, gear_pos1, gear_pos2]
+        alignment = ["vertical", "vertical", "horizontal", "horizontal", "horizontal", "horizontal", "vertical", "vertical"]
+
+        results = zip(positions, point_forces, alignment)
+        self.point_loads = results
+        return results
 
 
-
-
-    
-def iterate_diameter():
-    return "something"
+        
