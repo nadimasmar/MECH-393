@@ -17,13 +17,13 @@ pi = np.pi
 class Shaft:
     pi = np.pi
     """By default, the shaft will be initialized as a steel shaft. These dimensions will be input later."""
-    def __init__(self, length, material_name, working, diameter):
+    def __init__(self, length, diameter, material_name=4140, working="tempered 400"):
         self.material = material_name
         self.Sy, self.Sut, self.HB, self.nu, self.E, self.G, self.rho = steels[material_name][working]
         self.length = length
         self.diameter = self._configure_diameter(diameter) # a bit annoying to pronounce
         self.volume = 0
-        self.mass = 0
+        self.mass = self.set_mass_of_shaft()
         self._stress_concentrations = dict()
         self._stress_factors = dict()
         self._keyways = dict()
@@ -31,7 +31,7 @@ class Shaft:
         self.ang_speed = None
         self.point_loads = list()
         self.torque = float()
-        self.distributed_loads = list() # This should be standardized as the stresses at x = 0 (maybe, this would zero the 
+        self.distributed_loads = self._set_distributed_loads() # This should be standardized as the stresses at x = 0 (maybe, this would zero the 
         # moment in shear moment diagram)
 
     def __len__(self):
@@ -89,9 +89,9 @@ class Shaft:
         if axial_pos > self.length or axial_pos < 0:
             raise ValueError("The axial position of the stress concentration exceeds the length of the shaft.")
 
-        isgroove = bool
-        initial_d = float
-        final_d = float
+        isgroove = bool()
+        initial_d = float()
+        final_d = float()
 
         keys, values = zip(*self.diameter.items()) # Saw this trick online
 
@@ -253,12 +253,12 @@ class Shaft:
 
         bending = baseStressCalculator.bending_stress(max(self.point_loads))
         torsion = baseStressCalculator.torsion_stress(self.torque, d)
-        max_stress = baseStressCalculator.von_mises_equivalent(np.array[[bending, torsion, 0],[torsion, 0, 0],[0,0,0]])
+        max_stress = baseStressCalculator.von_mises_equivalent(bending, 0, 0, torsion, 0, 0)
 
         kf = factors["kf"]
         kfs = factors["kfs"]
-        kfm = float
-        kfsm = float
+        kfm = float()
+        kfsm = float()
 
         if kf * max_stress < self.Sy:
             kfm = kf
@@ -385,6 +385,17 @@ class Shaft:
                 moment += force_resultant * (x - centroid)
                 
         return moment
+    
+    def _get_shear_mesh(self, axis, num_points=1000):
+        x_vals = np.linspace(0, self.length, num_points)    
+        shear = np.array([self.get_shear_at(x, axis) for x in x_vals])
+        return shear
+
+
+    def _get_moment_mesh(self, axis, num_points=1000):
+        x_vals = np.linspace(0, self.length, num_points)
+        moment = np.array([self.get_moment_at(x, axis) for x in x_vals])
+        return moment
 
     def plot_shaft_diagrams(self, axis, num_points=1000):
         """
@@ -400,8 +411,8 @@ class Shaft:
         
         # 2. Calculate Shear (V) and Moment (M) at every x-coordinate
         # Using list comprehensions to call the beam's internal methods
-        V_vals = np.array([self.get_shear_at(x, axis) for x in x_vals])
-        M_vals = np.array([self.get_moment_at(x, axis) for x in x_vals])
+        V_vals = self._get_shear_mesh(axis, num_points)
+        M_vals = self._get_moment_mesh(axis, num_points)
         
         # 3. Initialize the matplotlib figure with two stacked subplots
         fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8), sharex=True)
@@ -485,36 +496,52 @@ class Shaft:
         d = self.min_diameter_equation(safety_factor,0,torque,bending_moment,tension,Sf,self.Sut) # Too lazy to code a while loop right now
         return d
 
-    def safety_factor(self, Sf: float, bending_moment: float, gear_moment: float, tension: float, torque: float):
-        """_summary_
+    @staticmethod
+    def safety_factor(Sf: float, Sut: float, net_bending_stress: float, torsion_stress: float, kf, kfsm, kfm = 1, uniaxial_stress: float = 0):
+        """Calculates the safety factor assuming a Category II fully reversed alternating stress and mean torque.
+
+        THIS FUNCTION IGNORES TRANSVERSE SHEAR: CHECK TREE HISTORY TO FIND THE ORIGINAL DEFINITION
 
         Args:
-            Sf (float): _description_
-            bending_moment (float): _description_
-            gear_moment (float): _description_
-            tension (float): _description_
-            torque (float): _description_
+            Sf (float): The fatigue strength of the material (defined at 5E8 cycles)
+            bending_moment (float): The bending moment (alternating) that is acting on the beam due to its weight
+            gear_moment (float): The bending moment that is acting on the beam due to the gear pressure
+            tension (float): the uniaxial tension on the shaft
+            torque (float): The torque that is being transferred through the shaft
+            shear (float, optional): The shear force (alternating) that is placed on the shaft. Defaults to 0 for simplicity.
 
         Returns:
-            _type_: _description_
+            num: The safety factor of the shaft.
         """        
 
-        d = min(self.diameter.values())
+        alt_stress = (kf * net_bending_stress, 0, 0, 0, 0, 0)
+        mean_stress = (kfm * uniaxial_stress, 0, 0, kfsm * torsion_stress, 0, 0)
+        alternating_stress = baseStressCalculator.von_mises_equivalent(*alt_stress)
+        mean_stress = baseStressCalculator.von_mises_equivalent(*mean_stress)
 
-        weight_bending = baseStressCalculator.bending_stress(bending_moment, d)
-        gear_bending = baseStressCalculator.bending_stress(gear_moment, d)
-        mean_axial = baseStressCalculator.axial_stress(tension, d)
-        mean_torque = baseStressCalculator.torsion_stress(torque, d)
-        alt_shear = 0 # baseStressCalculator.transverse_shear(reaction_force, d) Ignore for now because negligible
-
-        alt_tensor = np.array([[weight_bending, alt_shear, 0], [alt_shear, gear_bending, 0],[0, 0, 0]])
-        mean_tensor = np.array([[mean_axial, mean_torque, 0],[mean_torque, 0, 0],[0, 0, 0]])
-        alternating_stress = baseStressCalculator.von_mises_equivalent(alt_tensor)
-        mean_stress = baseStressCalculator.von_mises_equivalent(mean_tensor)
-
-        Nf = GoodmanSafetyFactorCalculator.calc_safety_factor_case_2(Sf,self.Sut,alternating_stress,mean_stress)
+        Nf = GoodmanSafetyFactorCalculator.calc_safety_factor_case_2(Sf,Sut,alternating_stress,mean_stress)
         return Nf
     
+    def _set_distributed_loads(self):
+        """Defines distributed loads affecting the shaft
+
+        Returns:
+            num: a list of distributed loads in tuple form, stored as
+                (start of load, end of load, magnitude of load) 
+        """        
+        dist_loads = list()
+        positions = list()
+        for pos, diameter in self.diameter:
+            A = pi * diameter ** 2 / 4
+            A /= 1e6 # convert to m^2
+            dist_loads.append(self.rho * A * 9.81)
+            positions.append(pos)
+
+        out = list()
+        for i in range(len(dist_loads)-1):
+            out.append((positions[i], positions[i+1], dist_loads[i]))
+        
+        return out
 
     def point_load_balance(self, 
                       bearing_pos1: float | int, 
@@ -589,6 +616,73 @@ class Shaft:
         results = zip(positions, point_forces, alignment)
         self.point_loads = results
         return results
-
-
         
+    def get_min_safety_factor(self):
+        """
+
+        Raises:
+            ValueError: _description_
+
+        Returns:
+            _type_: _description_
+        """
+
+        if len(self.point_loads) == 0:
+            raise ValueError("The force balance on the shaft has not yet been completed. Please use the point_load_balance function.")
+        if self.torque == 0:
+            choice = input("There is no torque on the shaft currently. Would you like to continue")
+            ans = ["yes", "y", "Yes", 1]
+            if choice not in ans:
+                return None
+            
+        safety_factors = list()
+        
+        num_points = 2000 # hard coded by preference
+        x_axis = np.linspace(0, self.length, num_points)
+        weight_moment_mesh = self._get_moment_mesh("vertical", num_points)
+        gear_moment_mesh = self._get_moment_mesh("horizontal", num_points)
+        # shear_mesh = self._get_shear_mesh("horizontal", num_points)
+
+        # shear_mesh = list()
+        d_change_pos = list(self.diameter.keys())
+        d_mesh = list()
+        for i in range(len(x_axis)):
+            diameter = 0
+            for pos in d_change_pos:
+                if x_axis[i] >= pos:
+                    diameter = self.diameter[pos]
+            d_mesh.append(diameter)
+            
+        net_mom = np.sqrt(weight_moment_mesh ** 2 + gear_moment_mesh ** 2)
+        # could add angle to find shear at this point
+        bending_mesh = [baseStressCalculator.bending_stress(net_mom[i], d_mesh[i]) for i in range(len(x_axis))]
+        torsion_mesh = [baseStressCalculator.torsion_stress(self.torque, d_mesh[i]) for i in range(len(x_axis))]
+        
+        # Step one: determine safety factor at maximum bending force
+
+        axial_stress = max(bending_mesh)
+        j = bending_mesh.index(axial_stress)
+        x_pos = x_axis[j]
+        torsion = torsion_mesh[j]
+
+        strf = self.stress_concentrations[x_pos] if j in self._stress_factors.keys() else {}
+
+        Sf = 0
+        kf, kfsm, kfm = 0, 0, 0
+        if len(strf) == 0:
+            kf, kfsm, kfm = 1, 1, 1
+        else:
+            kf, kfsm, kfm = strf["kf"], strf["kfsm"], strf["kfm"]
+
+        Nf = self.safety_factor(Sf, self.Sut, axial_stress, torsion, kf, kfsm, kfm)
+
+        # Step two: determine safety factor at all stress concentrations
+
+        for position, factors in self._stress_factors:
+            closest = np.abs(x_axis - position).argmin()
+            axial_stress = bending_mesh[closest]
+            torsion = torsion_mesh[closest]
+            Nf = self.safety_factor(Sf, self.Sut, axial_stress, torsion, factors["kf"], factors["kfsm"], factors["kfm"])
+            safety_factors.append(Nf)
+        
+        return min(safety_factors)
