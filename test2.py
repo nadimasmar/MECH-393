@@ -24,6 +24,7 @@ print(test2.point_loads)
 test2.add_stress_concentration(100,2)
 print(test2.stress_concentrations)
 print(test2.stress_factors)
+test2.plot_shaft_diagrams('vertical')
 
 '''test.torque = 540 * 1e3
 test.point_load_balance(0,500,0,0,0,0,1,1,20,test.torque)
@@ -32,3 +33,37 @@ print(test.point_loads)
 '''
 N = test2.get_min_safety_factor()
 print(N)
+
+input_torque = 28000 / 1700 *np.pi / 30
+print(input_torque)
+
+d_in = {
+    0: 20,
+    40: 30,
+    45: 20,
+}
+
+l_in = 189
+
+ret_in = (87, 1)
+should1_in = (40, 0.5)
+should2_in = (45, 0.5)
+key_in = (70)
+
+
+d_1 = {
+    0: 20,
+    20: 30,
+    81: 40,
+    86: 30,
+    135: 20,
+}
+
+d_2 = {
+    
+}
+
+first_stage = Shaft(189, d_1)
+first_stage.add_stress_concentration()
+
+
