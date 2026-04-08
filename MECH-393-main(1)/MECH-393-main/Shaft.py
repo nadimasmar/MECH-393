@@ -1,0 +1,729 @@
+from shaft_tables import *
+from tables_values import *
+import numpy as np
+from Goodman_safety_factor_calculator import *
+from Fatigue_strength_calculator import *
+from baseStressCalculator import *
+#from beambending import beam
+from interpolators import *
+from keys import *
+import matplotlib.pyplot as plt
+
+''' All values in SI units (mm, N, etc.), and keys are assumed to be
+rectangular parallel keys, unless otherwise specified.'''
+
+pi = np.pi
+
+class Shaft:
+    pi = np.pi
+    """By default, the shaft will be initialized as a steel shaft. These dimensions will be input later."""
+    def __init__(self, length, material_name, working, diameter):
+        self.material = material_name
+        self.Sy, self.Sut, self.HB, self.nu, self.E, self.G, self.rho = steels[material_name][working]
+        self.length = length
+        self.diameter = self._configure_diameter(diameter) # a bit annoying to pronounce
+        self.volume = 0
+        self.mass = 0
+        self._stress_concentrations = dict()
+        self._stress_factors = dict()
+        self._keyways = dict()
+        self.rotating = False
+        self.ang_speed = None
+        self.point_loads_y = list()
+        self.point_loads_z = list()
+        self.torque = float()
+        self.distributed_loads_y = list() # This should be standardized as the stresses at x = 0 (maybe, this would zero the 
+        # moment in shear moment diagram)
+        self.distributed_loads_z = list()
+
+    def __len__(self):
+        return self.length
+
+    def is_rotating(self,speed: float | int =0):
+        self.rotating = True
+        self.check_whirling(speed)
+        self.ang_speed = speed
+
+    def check_whirling(self, speed: float | int):
+        """Checks if the shaft would be whirling at the nominal angular velocity.
+
+        Args:
+            speed (num): The speed at which the Shaft is spinning.
+        """        
+        if self.mass == 0:
+            self.set_mass_of_shaft()
+        # making a terrible lump mass approximation
+        # assuming fixed-fixed connection
+        weight = self.mass * 9.81
+        r_squared = self.volume / self.length / pi
+        I_zz = r_squared ** 2 * pi / 4
+        max_delta = weight * self.length ** 3 / (192 * self.E * I_zz)
+        omega_n = np.sqrt(9810 / max_delta)
+        check = speed / omega_n > 0.9 and speed / omega_n < 1.1
+        if check:
+            print("Warning: the shaft may be whirling, which " \
+            "may damage parts of the shaft.")
+        else:
+            print(f"The natural frequency is approximately {omega_n}")
+            
+    
+    def _configure_diameter(self, diameter: dict | float | int):
+        """Configures the variation of diameter along the shaft into a dictionary.
+
+        Args:
+            diameter (dict or num): One or more shaft diameters, in numerical or dictionary form
+
+        Returns:
+            dict: Dictionary defining the variation in diameter of the Shaft
+        """        
+        if isinstance(diameter, dict):
+            return diameter.update({self.length: list(diameter.values())[-1]})
+        elif isinstance(diameter, (float, int)):
+            return {0 : diameter, self.length : diameter}
+    
+    def add_stress_concentration(self, axial_pos: float, radius: float) -> None:
+        """Adds a stress concentration, assuming a perfectly radial notch or fillet. 
+
+        Args:
+            axial_pos (num): Position along the axis of the Shaft object to locate the stress concentration.
+            radius (num): Radius of the stress concentration.
+        """
+        if axial_pos > self.length or axial_pos < 0:
+            raise ValueError("The axial position of the stress concentration exceeds the length of the shaft.")
+
+        isgroove = bool
+        initial_d = float
+        final_d = float
+
+        keys, values = zip(*self.diameter.items()) # Saw this trick online
+
+        for index in range(len(keys)):
+            if axial_pos not in self.diameter.keys():
+                isgroove = True
+                if axial_pos < keys[index]:
+                    print("Since there is no change in diameter at this location, this will be interpreted as a groove.")
+                    initial_d = values[index-1]
+                    final_d = initial_d
+                    break
+            elif axial_pos == keys[index]:
+                isgroove = False
+                initial_d = values[index-1]
+                final_d = values[index]
+                break
+
+        if 2 * radius > initial_d:
+            raise ValueError("The assigned radius of the groove or fillet exceeds the diameter of the shaft.")
+        
+        # Storing the stress concentration values
+
+        diameters = (initial_d, final_d)
+        if isgroove:
+            r, d, D = radius, max(diameters) - 2 * radius, max(diameters)
+        else:
+            r, d, D = radius, min(diameters), max(diameters)
+        self._stress_concentrations[axial_pos] = (r, d, D)
+
+        factors = dict()
+
+        def set_kt_axial():
+            """Calculates the stress concentration factor due to axial loading at the location of each stress concentration, 
+            using the dimensions stored in self._stress_concentrations.
+            """
+            a, b = float, float
+            if isgroove:
+                a, b = interpolate_table_tuple_pair(kt_groove_tension, D / d)
+            else:
+                a, b = interpolate_table_tuple_pair(kt_shoulder_fillet_tension, D / d)
+            factors["ktx"] = a * (r/d) ** b
+
+        def set_kt_bending():
+            """Calculates the stress concentration factor due to bending at the location of each stress concentration, 
+            using the dimensions stored in self._stress_concentrations.
+            """
+            a, b = float, float
+            if isgroove:
+                a, b = interpolate_table_tuple_pair(kt_groove_bending, D / d)
+            else:
+                a, b = interpolate_table_tuple_pair(kt_shoulder_fillet_bending, D / d)
+            factors["ktb"] = a * (r/d) ** b
+
+        def set_kt_torsion():
+            """Calculates the stress concentration factor due to torsion at the location of each stress concentration, 
+            using the dimensions stored in self._stress_concentrations.
+            """
+            a, b = float, float
+            if isgroove:
+                a, b = interpolate_table_tuple_pair(kt_groove_tension, D / d)
+            else:
+                a, b = interpolate_table_tuple_pair(kt_shoulder_fillet_tension, D / d)
+            factors["kts"] = a * (r/d) ** b
+
+        def set_kf():
+            """Calculates the fatigue stress concentration factor due to alternating stress at the location of each stress concentration, 
+            using the dimensions stored in self._stress_concentrations.
+            """
+            neuber_cnst = interpolate_table_dimensions(neuber_steel, self.Sut * 0.14504) # hard-coded for now to convert to ksi
+            q = 1 / (1 + neuber_cnst / np.sqrt(r))
+            ktb = factors["ktb"]
+            kts = factors["kts"]
+            factors["kf"] = 1 + q * (ktb - 1)
+            factors["kfs"] = 1 + q * (kts - 1)
+
+        def set_km():
+            """Calculates the fatigue stress concentration factor applied to mean stresses at the location of a stress concentration,
+            using the dimensions of the concentration."""
+
+            bending = baseStressCalculator.bending_stress(max(self.point_loads_y))
+            torsion = baseStressCalculator.torsion_stress(self.torque, d)
+            max_stress = baseStressCalculator.von_mises_equivalent(np.array[[bending, torsion, 0],[torsion, 0, 0],[0,0,0]])
+
+            kf = factors["kf"]
+            kfs = factors["kfs"]
+            kfm = float
+            kfsm = float
+
+            if kf * max_stress < self.Sy:
+                kfm = kf
+            elif kf * 2 * max_stress < 2 * self.Sy:
+                kfm = (self.Sy - kf * bending) / torsion
+            else:
+                kfm = 0
+
+            if kfs * max_stress < self.Sy:
+                kfsm = kfs
+            elif kfs * 2 * max_stress < 2 * self.Sy:
+                kfsm = (self.Sy - kfs * bending) / torsion
+            else:
+                kfsm = 0
+            
+            factors["kfm"] = kfm
+            factors["kfsm"] = kfsm
+        
+        set_kt_axial()
+        set_kt_bending()
+        set_kt_torsion()
+        set_kf() # Order is important
+        set_km()
+
+        self._stress_factors[axial_pos] = factors
+
+    def add_keyseat(self, axial_pos: float):
+        """Adds a keyseat to the shaft, where a key will be placed to engage with the gear.
+        Imposes the ASME recommendation that r/d remains approximately 0.021.
+        It is recommended that the keyseat end before the shoulder fillet on the shaft
+        begins such that the stress concentrations can be considered independently.
+
+        Args:
+            axial_pos (float): Axial position along the shaft at which the keyseat is required
+
+        Raises:
+            ValueError: _description_
+        """        
+        # we will enforce the ASME recommencation that the ratio r/d = 0.021
+        # Also assumed is that the key is engaged
+        d = 0
+        if axial_pos < 0 or axial_pos > list(self.diameter.keys())[-1]:
+                raise ValueError("The requested axial position is beyond the length of the shaft")
+        for key, value in self.diameter:
+            if axial_pos > key:
+                d = value
+                break
+        r = 0.021 * d
+
+        w = Key.key_dimensions_from_shaft_diameter_sqr(d)
+
+        self._keyways[axial_pos] = (w, r)
+
+        a, b, c = kt_keyseat_bending["B"]
+        ktb = a + b * (rcl(0.021) / 10) + c * (rcl(0.021) / 10) ** 2
+        
+        d, e, f = kt_keyseat_torsion["B"]
+        kts = d + e * (rcl(0.021) / 10) + f * (rcl(0.021) / 10) ** 2
+
+        factors = dict()
+        
+        factors["ktb"] = max(ktb,kt_keyseat_bending["A"])
+        factors["kts"] = max(kts,kt_keyseat_torsion["A"])
+        factors["ktx"] = 1 # Could interpret this later but not worried about it right now
+
+        neuber_cnst = interpolate_table_dimensions(neuber_steel, self.Sut * 0.14504) # hard-coded for now
+        q = 1 / (1 + neuber_cnst / np.sqrt(r))
+        ktb = factors["ktb"]
+        kts = factors["kts"]
+        factors["kf"] = 1 + q * (ktb - 1)
+        factors["kfs"] = 1 + q * (kts - 1)
+
+        bending = baseStressCalculator.bending_stress(max(self.point_loads_y))
+        torsion = baseStressCalculator.torsion_stress(self.torque, d)
+        max_stress = baseStressCalculator.von_mises_equivalent(np.array[[bending, torsion, 0],[torsion, 0, 0],[0,0,0]])
+
+        kf = factors["kf"]
+        kfs = factors["kfs"]
+        kfm = float
+        kfsm = float
+
+        if kf * max_stress < self.Sy:
+            kfm = kf
+        elif kf * 2 * max_stress < 2 * self.Sy:
+            kfm = (self.Sy - kf * bending) / torsion
+        else:
+            kfm = 0
+
+        if kfs * max_stress < self.Sy:
+            kfsm = kfs
+        elif kfs * 2 * max_stress < 2 * self.Sy:
+            kfsm = (self.Sy - kfs * bending) / torsion
+        else:
+            kfsm = 0
+        
+        factors["kfm"] = kfm
+        factors["kfsm"] = kfsm
+
+        self._keyways[axial_pos] = ()
+        return
+  
+    def _get_sc(self):
+        return self._stress_concentrations
+    
+    def _get_sf(self):
+        return self._stress_factors
+
+    stress_concentrations = property(
+        fget = _get_sc,
+        fset = None,
+        fdel = None,
+        doc = "The stress concentrations that appear on the shaft."
+    )
+
+    stress_factors = property(
+        fget = _get_sf,
+        fset = None,
+        fdel = None,
+        doc = "The stress concentration factors resulting from changes in cross-section."
+    )
+
+    def set_mass_of_shaft(self):
+        """Calculates the mass (and thus the volume due to assumed homogeneity of the material) of the shaft.
+
+        Returns: None"""
+            
+        vol = 0
+        steps = list(self.diameter.keys())
+        for index in range(len(steps)-1):
+            l = steps[index+1] - steps[index]
+            d = self.diameter[steps[index]]
+            vol += 0.25 * l * pi * d ** 2
+        for values in self._stress_concentrations.values():
+            # Accounting for the volume created by the radii. This was calculated manually
+            r, d, D = values
+            washer = (2 * pi - pi ** 2 / 2 ) * d * r ** 2 + \
+                (2 * pi - pi / 3 - pi ** 2 / 2) * r ** 3
+            if d == D:
+            # i.e. if it is a semi-circular groove, have to remove "two" radii
+                vol -= 2 * washer
+            else:
+            # i.e. if it is a notch, only one to remove.
+                vol += washer
+
+        # Currently the volume is in cubic millimeters: now it will be converted to cubic meters.
+        # arbitrary accuracy
+        vol *= 1e-9
+        self.volume = round(vol, 5)
+        mass = vol * self.rho
+        self.mass = round(mass, 5)
+
+    def get_diameter_at(self, x: float) -> float:
+        """
+        Fetches the diameter at a specific axial position x based on 
+        the self.diameter dictionary.
+        """
+        # Sort the positions to traverse the shaft from left to right
+        positions = sorted(self.diameter.keys())
+        
+        # Default to the first diameter
+        current_d = self.diameter[positions[0]]
+        
+        for pos in positions:
+            if x >= pos:
+                current_d = self.diameter[pos]
+            else:
+                break
+                
+        return current_d
+    
+    def get_shear_at(self, x: float) -> tuple[float, float]:
+        """
+        Calculates the internal shear force at a specific axial position x 
+        in both the Y and Z directions.
+        Returns: (shear_y, shear_z)
+        """
+        if x < 0 or x > self.length:
+            raise ValueError("Position x is outside the shaft boundaries.")
+            
+        shear_y = 0.0
+        shear_z = 0.0
+        
+        # --- Y-Axis Contributions ---
+        # 1. Point loads Y
+        for axial_pos, force in self.point_loads_y:
+            if axial_pos <= x:
+                shear_y += force
+                
+        # 2. Distributed loads Y
+        for start, end, mag in self.distributed_loads_y:
+            if start < x:
+                effective_end = min(x, end)
+                loaded_length = effective_end - start
+                shear_y += mag * loaded_length
+
+        # --- Z-Axis Contributions ---
+        # 1. Point loads Z
+        for axial_pos, force in self.point_loads_z:
+            if axial_pos <= x:
+                shear_z += force
+                
+        # 2. Distributed loads Z
+        for start, end, mag in self.distributed_loads_z:
+            if start < x:
+                effective_end = min(x, end)
+                loaded_length = effective_end - start
+                shear_z += mag * loaded_length
+                
+        return shear_y, shear_z
+
+    def get_moment_at(self, x: float) -> tuple[float, float]:
+        """
+        Calculates the internal bending moment at a specific axial position x
+        in both the Y and Z directions.
+        Returns: (moment_y, moment_z)
+        """
+        if x < 0 or x > self.length:
+            raise ValueError("Position x is outside the shaft boundaries.")
+            
+        moment_y = 0.0
+        moment_z = 0.0
+        
+        # --- Y-Axis Contributions ---
+        # 1. Point load moment contributions (Force * distance to x)
+        for axial_pos, force in self.point_loads_y:
+            if axial_pos <= x:
+                moment_y += force * (x - axial_pos)
+                
+        # 2. Distributed load moment contributions
+        for start, end, mag in self.distributed_loads_y:
+            if start < x:
+                effective_end = min(x, end)
+                loaded_length = effective_end - start
+                
+                # Treat the truncated distributed load as a point force at its centroid
+                force_resultant = mag * loaded_length
+                centroid = start + (loaded_length / 2.0)
+                
+                # Moment is the resultant force multiplied by the lever arm to x
+                moment_y += force_resultant * (x - centroid)
+
+        # --- Z-Axis Contributions ---
+        # 1. Point load moment contributions (Force * distance to x)
+        for axial_pos, force in self.point_loads_z:
+            if axial_pos <= x:
+                moment_z += force * (x - axial_pos)
+                
+        # 2. Distributed load moment contributions
+        for start, end, mag in self.distributed_loads_z:
+            if start < x:
+                effective_end = min(x, end)
+                loaded_length = effective_end - start
+                
+                # Treat the truncated distributed load as a point force at its centroid
+                force_resultant = mag * loaded_length
+                centroid = start + (loaded_length / 2.0)
+                
+                # Moment is the resultant force multiplied by the lever arm to x
+                moment_z += force_resultant * (x - centroid)
+                
+        return moment_y, moment_z
+
+    import numpy as np
+
+    def calculate_stresses_at(self, x: float, failure_theory="von_mises", tolerance=1e-5) -> tuple[float, float, float, float]:
+        """
+        Calculates the internal stresses at a specific axial location x.
+        
+        Args:
+            x (float): Axial position along the shaft.
+            failure_theory (str): "von_mises" or "principal".
+            tolerance (float): Distance threshold to apply localized stress concentrations.
+            
+        Returns:
+            tuple: (Resultant Moment, Bending Stress, Torsional Stress, Combined Max Stress)
+        """
+        if x < 0 or x > self.length:
+            raise ValueError("Position x is outside the shaft boundaries.")
+
+        # 1. Geometry and Loads
+        d = self.get_diameter_at(x)
+        my, mz = self.get_moment_at(x)
+        m_res = np.sqrt(my**2 + mz**2)
+        
+        # 2. Nominal Stresses
+        sigma_x_nom = (32 * m_res) / (np.pi * d**3)
+        tau_nom = (16 * self.torque) / (np.pi * d**3)
+        
+        # 3. Apply Stress Concentrations (Kt)
+        kt_bending = 1.0
+        kt_torsion = 1.0
+        for loc, factors in self._stress_factors.items():
+            if abs(x - loc) <= tolerance:
+                kt_bending = max(kt_bending, factors.get("ktb", 1.0))
+                kt_torsion = max(kt_torsion, factors.get("kts", 1.0))
+                
+        # 4. Localized Stresses
+        sigma_x = sigma_x_nom * kt_bending
+        tau = tau_nom * kt_torsion
+        
+        # 5. Combined Stress Theory
+        if failure_theory == "von_mises":
+            sigma_max = np.sqrt(sigma_x**2 + 3 * tau**2)
+        elif failure_theory == "principal":
+            sigma_max = (sigma_x / 2) + np.sqrt((sigma_x / 2)**2 + tau**2)
+        else:
+            raise ValueError("failure_theory must be 'von_mises' or 'principal'")
+            
+        return m_res, sigma_x, tau, sigma_max
+
+    def plot_shaft_diagrams(self, num_points=1000, failure_theory="von_mises"):
+        """
+        Generates and displays the Resultant Bending Moment, Component Stresses, 
+        and Max Stress diagrams for the shaft.
+        """
+        # 1. Generate coordinates and dynamic tolerance for step-matching
+        x_vals = np.linspace(0, self.length, num_points)
+        tolerance = self.length / num_points
+        
+        # 2. Initialize data arrays
+        M_res_vals = np.zeros(num_points)
+        sigma_b_vals = np.zeros(num_points)
+        tau_t_vals = np.zeros(num_points)
+        sigma_max_vals = np.zeros(num_points)
+        
+        # 3. Discretization Loop
+        for i, x in enumerate(x_vals):
+            m_res, sig_b, tau_t, sig_max = self.calculate_stresses_at(x, failure_theory, tolerance)
+            
+            M_res_vals[i] = m_res
+            sigma_b_vals[i] = sig_b
+            tau_t_vals[i] = tau_t
+            sigma_max_vals[i] = sig_max
+            
+        # 4. Find global maximums for annotation
+        max_sigma = np.max(sigma_max_vals)
+        max_idx = np.argmax(sigma_max_vals)
+        critical_x = x_vals[max_idx]
+
+        # 5. Plotting (3 Stacked Subplots)
+        fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(10, 12), sharex=True)
+        
+        # Plot 1: Resultant Bending Moment Diagram
+        ax1.plot(x_vals, M_res_vals, color='red', linewidth=2)
+        ax1.fill_between(x_vals, M_res_vals, 0, color='red', alpha=0.2)
+        ax1.set_ylabel('Resultant Moment M')
+        ax1.set_title('Resultant Bending Moment Diagram')
+        ax1.grid(True, linestyle='--', alpha=0.7)
+        
+        # Plot 2: Component Stresses (Bending & Torsion)
+        ax2.plot(x_vals, sigma_b_vals, color='orange', linewidth=2, label='Bending Stress ($\sigma_x$)')
+        ax2.plot(x_vals, tau_t_vals, color='green', linewidth=2, label='Torsional Stress ($\\tau$)')
+        ax2.set_ylabel('Component Stress')
+        ax2.set_title('Bending & Torsional Stresses (Shows Geometry Steps)')
+        ax2.legend()
+        ax2.grid(True, linestyle='--', alpha=0.7)
+        
+        # Plot 3: Max Stress Diagram
+        ax3.plot(x_vals, sigma_max_vals, color='purple', linewidth=2)
+        ax3.fill_between(x_vals, sigma_max_vals, 0, color='purple', alpha=0.2)
+        
+        # Annotation for Maximum Stress
+        ax3.plot(critical_x, max_sigma, 'ko') # Black dot at peak
+        ax3.annotate(f'Max: {max_sigma:.2e}\nat x={critical_x:.3f}', 
+                     xy=(critical_x, max_sigma), 
+                     xytext=(critical_x + (self.length*0.05), max_sigma * 0.9),
+                     arrowprops=dict(facecolor='black', shrink=0.05, width=1.5, headwidth=6))
+                     
+        ax3.set_xlabel('Position x')
+        
+        # Dynamic labels based on theory
+        if failure_theory == "von_mises":
+            ax3.set_ylabel("von Mises Stress $\sigma'$")
+            ax3.set_title("Maximum von Mises Stress Diagram")
+        else:
+            ax3.set_ylabel("Principal Stress $\sigma_1$")
+            ax3.set_title("Maximum Principal Stress Diagram")
+            
+        ax3.grid(True, linestyle='--', alpha=0.7)
+        
+        plt.tight_layout()
+        plt.show()
+
+    def min_diameter_equation(self, 
+                              safety_factor: float, 
+                              T_a: float, 
+                              T_m: float, 
+                              M_a: float, 
+                              M_m: float, 
+                              Sf: float, 
+                              Sut: float
+                              ):
+        """_summary_
+
+        Args:
+            safety_factor (float): _description_
+            T_a (float): _description_
+            T_m (float): _description_
+            M_a (float): _description_
+            M_m (float): _description_
+            Sf (float): _description_
+            Sut (float): _description_
+
+        Returns:
+            _type_: _description_
+        """        
+        kf, kfs, kfm, kfsm = 0, 0, 0, 0
+        if len(self._stress_factors) == 0:
+            kf, kfs, kfm, kfsm = 1, 1, 1, 1
+        else:
+            factors = self._stress_factors.values()
+            kf = max([i["kf"] for i in factors])
+            kfs = max([i["kfs"] for i in factors])
+            kfm = max([i["kfm"] for i in factors])
+            kfsm = max([i["kfsm"] for i in factors])
+        d = (32 * safety_factor / pi * (np.sqrt((kf * M_a) ** 2 + 3 / 4 * (kfs * T_a) ** 2) / Sf + \
+                                np.sqrt((kfm * M_m) ** 2 + 3 / 4 * (kfsm * T_m) ** 2) / Sut)) ** (1/3)        
+        return d
+
+    def min_diameter(self, torque: float, bending_moment: float, tension: float, safety_factor: float =2.5):
+        """_summary_
+
+        Args:
+            torque (float): _description_
+            bending_moment (float): _description_
+            tension (float): _description_
+            safety_factor (float, optional): _description_. Defaults to 2.5.
+
+        Returns:
+            _type_: _description_
+        """        
+        
+        dimensions = {"diameter" : min(self.diameter.values())}
+        Sf = FatigueStrengthCalculator.calc_corrected_fatigue_strength(
+            self.Sut, "steel", "shaft", dimensions, "cold-rolled", "bending", 50, 25)
+        d = self.min_diameter_equation(safety_factor,0,torque,bending_moment,tension,Sf,self.Sut)
+        dimensions["diameter"] = d
+        Sf = FatigueStrengthCalculator.calc_corrected_fatigue_strength(
+            self.Sut, "steel", "shaft", dimensions, "cold-rolled", "bending", 50, 25)
+        d = self.min_diameter_equation(safety_factor,0,torque,bending_moment,tension,Sf,self.Sut) # Too lazy to code a while loop right now
+        return d
+
+    def safety_factor(self, Sf: float, bending_moment: float, gear_moment: float, tension: float, torque: float):
+        """_summary_
+
+        Args:
+            Sf (float): _description_
+            bending_moment (float): _description_
+            gear_moment (float): _description_
+            tension (float): _description_
+            torque (float): _description_
+
+        Returns:
+            _type_: _description_
+        """        
+
+        d = min(self.diameter.values())
+
+        weight_bending = baseStressCalculator.bending_stress(bending_moment, d)
+        gear_bending = baseStressCalculator.bending_stress(gear_moment, d)
+        mean_axial = baseStressCalculator.axial_stress(tension, d)
+        mean_torque = baseStressCalculator.torsion_stress(torque, d)
+        alt_shear = 0 # baseStressCalculator.transverse_shear(reaction_force, d) Ignore for now because negligible
+
+        alt_tensor = np.array([[weight_bending, alt_shear, 0], [alt_shear, gear_bending, 0],[0, 0, 0]])
+        mean_tensor = np.array([[mean_axial, mean_torque, 0],[mean_torque, 0, 0],[0, 0, 0]])
+        alternating_stress = baseStressCalculator.von_mises_equivalent(alt_tensor)
+        mean_stress = baseStressCalculator.von_mises_equivalent(mean_tensor)
+
+        Nf = GoodmanSafetyFactorCalculator.calc_safety_factor_case_2(Sf,self.Sut,alternating_stress,mean_stress)
+        return Nf
+    
+
+    def point_load_balance(self, 
+                      bearing_pos1: float | int, 
+                      bearing_pos2: float | int, 
+                      gear_pos1 : float | int, 
+                      gear_pos2 : float | int, 
+                      gear_mass_1: float | int,
+                      gear_mass_2: float | int,
+                      gear_pd_1: float | int,
+                      gear_pd_2: float | int,
+                      gear_phi: float | int,
+                      gear_torque_in: float | int,
+                      shaft_mass: float | int = None
+                      ):
+        """Determines the reaction forces of the shaft at different positions. Assumes 
+        that the center of gravity is at the half length of the shaft (ergo balanced around
+        its half length). 
+
+        Args:
+            bearing_pos1 (num): The position of the first supporting bearing.
+            bearing_pos2 (num): The position of the second supporting bearing.
+            gear_pos1 (num): The position of the first assembled gear.
+            gear_pos2 (num): The position of the second assembled gear.
+            gear_mass_1 (num): The mass of the first assembled gear.
+            gear_mass_2 (num): The mass of the second assembled gear.
+            gear_pd_1 (num): The pitch diameter of the first assembled gear.
+            gear_pd_2 (num): The pitch diameter of the second assembled gear.
+            gear_phi (num): The pressure angle of both of the gears.
+            gear_torque_in (num): The torque applied by the input gear.
+            shaft_mass (num, optional): The mass of the shaft if otherwise calculated 
+            more precisely. Defaults to None.
+
+        Returns:
+            list: list of 3-tuples containing the forces, their positions, and 
+            their axial alignments.
+
+        NEED TO RESOLVE DIRECTION OF VECTORS
+        """
+
+        # Resolving gear forces and shaft weight
+        # Assuming that the gear train(s) are in the x-z plane
+
+        tangent_force_1 = gear_torque_in / gear_pd_1
+        tangent_force_2 = -gear_torque_in / gear_pd_2 # conserving moment about x
+
+        radial_force1 = tangent_force_1 * np.tan(gear_phi)
+        radial_force2 = -tangent_force_2 * np.tan(gear_phi)
+
+        length = self.length
+        S_W = self.mass * 9.81
+        if shaft_mass is not None:
+            S_W = shaft_mass * 9.81 
+        G_W1, G_W2 = gear_mass_1 * 9.81, gear_mass_2 * 9.81
+        
+        # Y-axis reaction forces
+
+        R2y = (S_W * (length / 2 - bearing_pos1) + 
+              (G_W1 + tangent_force_1) * (gear_pos1 - bearing_pos1) + 
+              (G_W2 + tangent_force_2) * (gear_pos2 - bearing_pos1)) / (bearing_pos2 - bearing_pos1)
+        R1y = S_W + G_W1 + G_W2 - R2y
+
+        # X-axis reaction forces
+        
+        R2x = (radial_force1 * (gear_pos1 - bearing_pos1) + 
+               radial_force2 * (gear_pos2 - bearing_pos1)) / (bearing_pos2 - bearing_pos1)
+        R1x = R2x - radial_force1 - radial_force2
+
+        point_forces = [R2y, R1y, R2x, R1x, radial_force1, radial_force2, G_W1, G_W2]
+        positions = [bearing_pos2, bearing_pos1, bearing_pos2, bearing_pos1, gear_pos1, gear_pos2, gear_pos1, gear_pos2]
+        alignment = ["vertical", "vertical", "horizontal", "horizontal", "horizontal", "horizontal", "vertical", "vertical"]
+
+        results = zip(positions, point_forces, alignment)
+        self.point_loads_y = results
+        return results
