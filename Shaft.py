@@ -20,19 +20,18 @@ class Shaft:
     def __init__(self, length, diameter, material_name=4140, working="tempered 400"):
         self.material = material_name
         self.Sy, self.Sut, self.HB, self.nu, self.E, self.G, self.rho = steels[material_name][working]
-        self.length = length
-        self.diameter = self._configure_diameter(diameter) # a bit annoying to pronounce
-        self.volume = 0
-        self.mass = self.set_mass_of_shaft()
+        self.length = length # mm
+        self.diameter = self._configure_diameter(diameter) # a bit annoying to pronounce, mm
+        self.volume = 0 
         self._stress_concentrations = dict()
         self._stress_factors = dict()
-        self._keyways = dict()
-        self.rotating = False
-        self.ang_speed = None
-        self.point_loads = list()
-        self.torque = float()
-        self.distributed_loads = self._set_distributed_loads() # This should be standardized as the stresses at x = 0 (maybe, this would zero the 
-        # moment in shear moment diagram)
+        self.mass = self.set_mass_of_shaft() # kg
+        self._keyways = dict() 
+        self.rotating = False 
+        self.ang_speed = None # rad/s
+        self.point_loads = list() # N
+        self.torque = float() # N m
+        self.distributed_loads = None # N/mm
 
     def __len__(self):
         return self.length
@@ -75,7 +74,8 @@ class Shaft:
             dict: Dictionary defining the variation in diameter of the Shaft
         """        
         if isinstance(diameter, dict):
-            return diameter.update({self.length: list(diameter.values())[-1]})
+            diameter[self.length] = list(diameter.values())[-1]
+            return diameter
         elif isinstance(diameter, (float, int)):
             return {0 : diameter, self.length : diameter}
     
@@ -109,12 +109,13 @@ class Shaft:
                 final_d = values[index]
                 break
 
-        if 2 * radius > initial_d:
+        if 2 * radius > initial_d: #technically wrong right now
             raise ValueError("The assigned radius of the groove or fillet exceeds the diameter of the shaft.")
         
         # Storing the stress concentration values
 
         diameters = (initial_d, final_d)
+        r, d, D = 0, 0, 0
         if isgroove:
             r, d, D = radius, max(diameters) - 2 * radius, max(diameters)
         else:
@@ -160,7 +161,12 @@ class Shaft:
             """Calculates the fatigue stress concentration factor due to alternating stress at the location of each stress concentration, 
             using the dimensions stored in self._stress_concentrations.
             """
-            neuber_cnst = interpolate_table_dimensions(neuber_steel, self.Sut * 0.14504) # hard-coded for now to convert to ksi
+            neuber_cnst = 0
+            Sut_imp = self.Sut * 0.14504
+            if Sut_imp in neuber_steel.keys():
+                neuber_cnst = interpolate_table_dimensions(neuber_steel, self.Sut * 0.14504) # hard-coded for now to convert to ksi
+            else:
+                neuber_cnst = list(neuber_steel.values())[-1] # A bit of a false cheat
             q = 1 / (1 + neuber_cnst / np.sqrt(r))
             ktb = factors["ktb"]
             kts = factors["kts"]
@@ -171,9 +177,9 @@ class Shaft:
             """Calculates the fatigue stress concentration factor applied to mean stresses at the location of a stress concentration,
             using the dimensions of the concentration."""
 
-            bending = baseStressCalculator.bending_stress(max(self.point_loads))
+            bending = baseStressCalculator.bending_stress(self.get_moment_at(axial_pos,"vertical"), d)
             torsion = baseStressCalculator.torsion_stress(self.torque, d)
-            max_stress = baseStressCalculator.von_mises_equivalent(np.array[[bending, torsion, 0],[torsion, 0, 0],[0,0,0]])
+            max_stress = baseStressCalculator.von_mises_equivalent(bending, 0, 0, torsion, 0, 0)
 
             kf = factors["kf"]
             kfs = factors["kfs"]
@@ -325,10 +331,10 @@ class Shaft:
 
         # Currently the volume is in cubic millimeters: now it will be converted to cubic meters.
         # arbitrary accuracy
-        vol *= 1e-9
-        self.volume = round(vol, 5)
-        mass = vol * self.rho
-        self.mass = round(mass, 5)
+        self.volume = vol
+        mass = vol * self.rho * 1e-9
+        self.mass = mass
+        return mass
 
 
     def get_shear_at(self, x: float, axis: str) -> float:
@@ -522,7 +528,7 @@ class Shaft:
         Nf = GoodmanSafetyFactorCalculator.calc_safety_factor_case_2(Sf,Sut,alternating_stress,mean_stress)
         return Nf
     
-    def _set_distributed_loads(self):
+    def set_distributed_loads(self):
         """Defines distributed loads affecting the shaft
 
         Returns:
@@ -531,7 +537,7 @@ class Shaft:
         """        
         dist_loads = list()
         positions = list()
-        for pos, diameter in self.diameter:
+        for pos, diameter in self.diameter.items():
             A = pi * diameter ** 2 / 4
             A /= 1e6 # convert to m^2
             dist_loads.append(self.rho * A * 9.81)
@@ -539,9 +545,9 @@ class Shaft:
 
         out = list()
         for i in range(len(dist_loads)-1):
-            out.append((positions[i], positions[i+1], dist_loads[i]))
+            out.append((positions[i], positions[i+1], -dist_loads[i] / 1e3))
         
-        return out
+        self.distributed_loads = out
 
     def point_load_balance(self, 
                       bearing_pos1: float | int, 
@@ -587,8 +593,8 @@ class Shaft:
         tangent_force_1 = gear_torque_in / gear_pd_1
         tangent_force_2 = -gear_torque_in / gear_pd_2 # conserving moment about x
 
-        radial_force1 = tangent_force_1 * np.tan(gear_phi)
-        radial_force2 = -tangent_force_2 * np.tan(gear_phi)
+        radial_force1 = tangent_force_1 * np.tan(np.deg2rad(gear_phi))
+        radial_force2 = -tangent_force_2 * np.tan(np.deg2rad(gear_phi))
 
         length = self.length
         S_W = self.mass * 9.81
@@ -613,18 +619,19 @@ class Shaft:
         positions = [bearing_pos2, bearing_pos1, bearing_pos2, bearing_pos1, gear_pos1, gear_pos2, gear_pos1, gear_pos2]
         alignment = ["vertical", "vertical", "horizontal", "horizontal", "horizontal", "horizontal", "vertical", "vertical"]
 
-        results = zip(positions, point_forces, alignment)
+        results = list(zip(positions, point_forces, alignment))
         self.point_loads = results
         return results
         
     def get_min_safety_factor(self):
-        """
+        """This is the culmination of everything. This function will return the smallest safety factor when checked at multiple critical points.
+        The critical points that are checked are at the stress concentrations and the locations of highest bending.
 
         Raises:
-            ValueError: _description_
+            ValueError: Prevents use of function for shafts with no force balance yet.
 
         Returns:
-            _type_: _description_
+            num: The minimum safety factor on the shaft.
         """
 
         if len(self.point_loads) == 0:
@@ -667,7 +674,9 @@ class Shaft:
 
         strf = self.stress_concentrations[x_pos] if j in self._stress_factors.keys() else {}
 
-        Sf = 0
+        dimensions = {"diameter": d_mesh[j]}
+        Sf = FatigueStrengthCalculator.calc_corrected_fatigue_strength(
+            self.Sut, "steel", "shaft", dimensions, "cold-rolled", "bending", 50, 25)
         kf, kfsm, kfm = 0, 0, 0
         if len(strf) == 0:
             kf, kfsm, kfm = 1, 1, 1
@@ -675,10 +684,11 @@ class Shaft:
             kf, kfsm, kfm = strf["kf"], strf["kfsm"], strf["kfm"]
 
         Nf = self.safety_factor(Sf, self.Sut, axial_stress, torsion, kf, kfsm, kfm)
+        safety_factors.append(Nf)
 
         # Step two: determine safety factor at all stress concentrations
 
-        for position, factors in self._stress_factors:
+        for position, factors in self._stress_factors.items():
             closest = np.abs(x_axis - position).argmin()
             axial_stress = bending_mesh[closest]
             torsion = torsion_mesh[closest]

@@ -48,6 +48,7 @@ def interpolate_table_tuple_pair(table: dict, table_key: float):
             xp = [selection[index], selection[index-1]]
             fp1, fp2 = [table[i][0] for i in xp], [table[i][1] for i in xp]
             a, b = float(np.interp(table_key,xp,fp1)), float(np.interp(table_key,xp,fp2))
+            break
     return (a,b)
 
 def interpolate_table_2tuple_tuple(table: dict, table_key: tuple):
