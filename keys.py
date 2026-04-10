@@ -118,7 +118,89 @@ class Key:
 
 if __name__ == "__main__":
     # Lecture 10 Example 10-4
-    key = Key(width=4.7498e-3, height=4.7498e-3, length=12.7e-3, mean_torque=8.25, alternating_torque=8.25, Sut=3.654e8, Sf_prime=0.5*3.654e8, Sy=3.034e8)
-    fatigue_safety_factor, bearing_safety_factor = key.calc_safety_factor(shaft_diameter=19.05e-3)
+    # key = Key(width=4.7498e-3, height=4.7498e-3, length=12.7e-3, mean_torque=8.25, alternating_torque=8.25, Sut=3.654e8, Sf_prime=0.5*3.654e8, Sy=3.034e8)
+    # fatigue_safety_factor, bearing_safety_factor = key.calc_safety_factor(shaft_diameter=19.05e-3)
+    # print(f"Fatigue Safety Factor: {fatigue_safety_factor:.2f}") 
+    # print(f"Bearing Safety Factor: {bearing_safety_factor:.2f}")
+
+    # Project Calculations:
+
+    # --- Input Key ---
+    shaft_diameter = 20.0e-3 # m
+    width = 6.0e-3 # m
+    height = 6.0e-3 # m
+    #4140 Steel Properties: Page 1041 from book
+    Sut = 1772e6 # Pa
+    Se_prime = np.min([0.5 * Sut, 1400e6]) # Pa
+    Sy = 1641e6 # Pa
+
+    key = Key(width=width, height=height, length=10.0e-3, mean_torque=157.3, alternating_torque=0, Sut=Sut, Sf_prime=Se_prime, Sy=Sy)
+    fatigue_safety_factor, bearing_safety_factor = key.calc_safety_factor(shaft_diameter=shaft_diameter)
+    print("--- Input Key ---")
     print(f"Fatigue Safety Factor: {fatigue_safety_factor:.2f}") 
     print(f"Bearing Safety Factor: {bearing_safety_factor:.2f}")
+    print("")
+
+
+    # --- Pinion 1 Key ---
+    shaft_diameter = 20.0e-3 # m
+    width = 6.0e-3 # m
+    height = 6.0e-3 # m
+    #4140 Steel Properties: Page 1041 from book
+    Sut = 1772e6 # Pa
+    Se_prime = np.min([0.5 * Sut, 1400e6]) # Pa
+    Sy = 1641e6 # Pa
+
+    key = Key(width=width, height=height, length=15.0e-3, mean_torque=157.3, alternating_torque=0, Sut=Sut, Sf_prime=Se_prime, Sy=Sy)
+    fatigue_safety_factor, bearing_safety_factor = key.calc_safety_factor(shaft_diameter=shaft_diameter)
+    print("--- Pinion 1 Key ---")
+    print(f"Fatigue Safety Factor: {fatigue_safety_factor:.2f}") 
+    print(f"Bearing Safety Factor: {bearing_safety_factor:.2f}")
+    print("")
+
+    # --- Gear 1 Key ---
+    shaft_diameter = 30.0e-3 # m
+    width = 6.0e-3 # m
+    height = 6.0e-3 # m
+    #4140 Steel Properties: Page 1041 from book
+    Sut = 1772e6 # Pa
+    Se_prime = np.min([0.5 * Sut, 1400e6]) # Pa
+    Sy = 1641e6 # Pa
+
+    key = Key(width=width, height=height, length=12.0e-3, mean_torque=157.3 * 56/24, alternating_torque=0, Sut=Sut, Sf_prime=Se_prime, Sy=Sy)
+    fatigue_safety_factor, bearing_safety_factor = key.calc_safety_factor(shaft_diameter=shaft_diameter)
+    print("--- Gear 1 Key ---")    
+    print(f"Fatigue Safety Factor: {fatigue_safety_factor:.2f}") 
+    print(f"Bearing Safety Factor: {bearing_safety_factor:.2f}")
+    print("")
+    # --- Pinion 2 Key ---
+    shaft_diameter = 30.0e-3 # m
+    width = 6.0e-3 # m
+    height = 6.0e-3 # m
+    #4140 Steel Properties: Page 1041 from book
+    Sut = 1772e6 # Pa
+    Se_prime = np.min([0.5 * Sut, 1400e6]) # Pa
+    Sy = 1641e6 # Pa
+
+    key = Key(width=width, height=height, length=15.0e-3, mean_torque=157.3 * 56/24, alternating_torque=0, Sut=Sut, Sf_prime=Se_prime, Sy=Sy)
+    fatigue_safety_factor, bearing_safety_factor = key.calc_safety_factor(shaft_diameter=shaft_diameter)
+    print("--- Pinion 2 Key ---")    
+    print(f"Fatigue Safety Factor: {fatigue_safety_factor:.2f}") 
+    print(f"Bearing Safety Factor: {bearing_safety_factor:.2f}")
+    print("")
+
+    # --- Gear 2 Key ---
+    shaft_diameter = 40.0e-3 # m
+    width = 12.0e-3 # m
+    height = 12.0e-3 # m
+    #4140 Steel Properties: Page 1041 from book
+    Sut = 1772e6 # Pa
+    Se_prime = np.min([0.5 * Sut, 1400e6]) # Pa
+    Sy = 1641e6 # Pa
+
+    key = Key(width=width, height=height, length=15.0e-3, mean_torque=157.3 * (56/24)**2, alternating_torque=0, Sut=Sut, Sf_prime=Se_prime, Sy=Sy)
+    fatigue_safety_factor, bearing_safety_factor = key.calc_safety_factor(shaft_diameter=shaft_diameter)
+    print("--- Gear 2 Key ---")    
+    print(f"Fatigue Safety Factor: {fatigue_safety_factor:.2f}") 
+    print(f"Bearing Safety Factor: {bearing_safety_factor:.2f}")
+    print("")
