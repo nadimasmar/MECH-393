@@ -679,7 +679,6 @@ class Shaft:
         
         plt.tight_layout()
         plt.show()
-
     def get_phase_angle_at(self, x: float) -> float:
         """
         Calculates the torsional windup (phase angle) in radians at a specific 
@@ -735,7 +734,6 @@ class Shaft:
                 
         print(f"PASSED: All positions are within the {max_allowed_degrees}° torsional deflection limit.")
         return True
-
 
     def plot_shear_bending_diagrams(self, axis, num_points=1000):
         """
