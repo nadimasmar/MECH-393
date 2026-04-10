@@ -88,7 +88,7 @@ class Key:
         for index in range(len(selection)):
             if d < selection[index] and d > selection[0]:
                 return std_square_key_range_mm[selection[index-1]]
-            raise ValueError("Shaft diameter out of supported range between 6 and 440 mm")
+        raise ValueError("Shaft diameter out of supported range between 6 and 440 mm")
 
     @staticmethod
     def key_dimensions_from_shaft_diameter_rect(shaft_diameter):
