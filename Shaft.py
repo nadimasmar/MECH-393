@@ -951,3 +951,59 @@ class Shaft:
         Nf = self.safety_factor(Sf, self.Sut, axial_stress, torsion, 1, 1, 1)
         
         return Nf
+    
+    def get_phase_angle_at(self, x: float) -> float:
+        """
+        Calculates the torsional windup (phase angle) in radians at a specific 
+        axial position 'x', relative to the start of the torque application.
+        """
+        start, end, torque_mag = self.torque
+        
+        # If no torque, or if we are looking at a point before the torque starts
+        if torque_mag == 0 or x <= start:
+            return 0.0
+
+        # We only calculate twist up to point x, or the end of the torque span (whichever comes first)
+        effective_end = min(x, end)
+        
+        positions = sorted(self.diameter.keys())
+        theta = 0.0
+
+        for i in range(len(positions)):
+            current_pos = positions[i]
+            next_pos = positions[i+1] if i + 1 < len(positions) else self.length
+
+            # Determine the overlap between this constant-diameter section and our effective span
+            overlap_start = max(start, current_pos)
+            overlap_end = min(effective_end, next_pos)
+
+            if overlap_start < overlap_end:
+                L_section = overlap_end - overlap_start
+                d = self.diameter[current_pos]
+                
+                J = (self.pi * d**4) / 32
+                G_MPa = self.G * 1000 
+                
+                theta += (torque_mag * L_section) / (J * G_MPa)
+
+        return theta
+
+    def check_torsional_deflection_limits(self, max_allowed_degrees: float, num_points: int = 1000) -> bool:
+        """
+        Sweeps the shaft to check if the torsional deflection at ANY point 
+        exceeds the maximum allowable limit.
+        """
+        x_vals = np.linspace(0, self.length, num_points)
+        
+        for x in x_vals:
+            twist_rad = self.get_phase_angle_at(x)
+            twist_deg = np.rad2deg(twist_rad)
+            
+            # Use absolute values to handle negative torque directions
+            if abs(twist_deg) > abs(max_allowed_degrees):
+                print(f"FAILED: Deflection limit exceeded at x = {x:.3f} mm.")
+                print(f"Twist is {twist_deg:.4f}°, exceeding the {max_allowed_degrees}° limit.")
+                return False
+                
+        print(f"PASSED: All positions are within the {max_allowed_degrees}° torsional deflection limit.")
+        return True
