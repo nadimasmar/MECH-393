@@ -290,10 +290,10 @@ if __name__ == "__main__":
 
 # ===== PARAMETERS =====
 # Stage 1
-m1, z_p1, z_g1, b1 = 3.0e-3, 26, 62, 36.0e-3
+m1, z_p1, z_g1, b1 = 3.0e-3, 24, 56, 42.0e-3
 
 # Stage 2
-m2, z_p2, z_g2, b2 = 3.5e-3, 28, 67, 56.0e-3
+m2, z_p2, z_g2, b2 = 4.0e-3, 24, 56, 54.0e-3
 
 # Constants
 Qv, phi = 11, 20
