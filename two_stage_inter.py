@@ -1,4 +1,10 @@
 from Shaft import *
+import matplotlib as mpl
+
+'''
+cmap = mpl.colormaps.get_cmap("YlGnBu")
+mpl.rcParams['cmap'] = cmap'''
+
 # counterclockwise motion
 diameter_inter = {
     0: 20,
@@ -56,6 +62,7 @@ inter_shaft.point_load_balance(bearing_1_pos,
 print(inter_shaft.point_loads_y)
 print(inter_shaft.torque)
 print(inter_shaft.get_min_safety_factor())
+print(inter_shaft.min_diameter(inter_shaft.torque[2], 230, 0))
 
-
-inter_shaft.plot_maximum_stress_diagrams(False)
+defl = inter_shaft.get_deflection_at(73)
+print(inter_shaft.get_torsion_angle_at(124))

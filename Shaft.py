@@ -10,12 +10,11 @@ from keys import *
 import matplotlib.pyplot as plt
 
 ''' All values in SI units (mm, N, MPa etc.), and keys are assumed to be
-rectangular parallel keys, unless otherwise specified.'''
+square parallel keys, unless otherwise specified.'''
 
 pi = np.pi
 
 class Shaft:
-    pi = np.pi
     """By default, the shaft will be initialized as a steel shaft. These dimensions will be input later."""
     def __init__(self, length, diameter, material_name=4140, working="tempered 400"):
         self.material = material_name
@@ -334,75 +333,24 @@ class Shaft:
         doc = "The stress concentration factors resulting from changes in cross-section."
     )
 
-    def get_deflection_at(self, x: float | int, axis: str) -> float:
-        net_deflection = 0
-        I_zz = self.get_area_moment_at(x)
-        if axis == 'y':
-            for pos, force in self.point_loads_y:
-                a, b = 0, 0
-                if x > pos:
-                    b = pos
-                    a = self.length - pos
-                else:
-                    a = pos
-                    b = self.length - pos
-                delta = 2 * force * b ** 2 * x ** 2 \
-                / (12 * self.E * I_zz * self.length ** 3) \
-                * (3 * a * self.length - 3 * a * x - b * x)
-                net_deflection += delta
-            for start, end, mag in self.distributed_loads_y:
-                net_force = (end - start) * -mag
-                pos = start + (end - start) / 2
-                if x > pos: 
-                    b = pos
-                    a = self.length - pos
-                else:
-                    a = pos
-                    b - self.length - pos
-                delta = 2 * net_force * b ** 2 * x ** 2 \
-                / (12 * self.E * I_zz * self.length ** 3) \
-                * (3 * a * self.length - 3 * a * x - b * x)
-                net_deflection += delta
-        elif axis == 'z':
-            for pos, force in self.point_loads_z:
-                a, b = 0, 0
-                if x < pos:
-                    b = pos
-                    a = self.length - pos
-                else:
-                    a = pos
-                    b = self.length - pos
-                I_zz = self.get_area_moment_at(x)
-                delta = 2 * force * b ** 2 * x ** 2 \
-                / (12 * self.E * I_zz * self.length ** 3) \
-                * (3 * a * self.length - 3 * a * x - b * x)
-                net_deflection += delta
-            for start, end, mag in self.distributed_loads_z:
-                net_force = (end - start) * -mag
-                pos = start + (end - start) / 2
-                if x > pos: 
-                    b = pos
-                    a = self.length - pos
-                else:
-                    a = pos
-                    b - self.length - pos
-                delta = 2 * net_force * b ** 2 * x ** 2 \
-                / (12 * self.E * I_zz * self.length ** 3) \
-                * (3 * a * self.length - 3 * a * x - b * x)
-                net_deflection += delta
-        return net_deflection
-
     def get_diameter_at(self, x: float) -> float:
         """
         Fetches the diameter at a specific axial position x based on 
         the self.diameter dictionary.
+
+        Args:
+            x (float): The axial position at which the diameter is desired.
+
+        Returns:
+            float: The diameter at the requested position.
+
         """
         # Sort the positions to traverse the shaft from left to right
         positions = sorted(self.diameter.keys())
-        
+
         # Default to the first diameter
         current_d = self.diameter[positions[0]]
-        
+
         for pos in positions:
             if x >= pos:
                 current_d = self.diameter[pos]
@@ -410,6 +358,53 @@ class Shaft:
                 break
                 
         return current_d
+
+    def get_deflection_at(self, x: float | int) -> tuple[float, float]:
+        """Returns the deflection on the shaft at any position. Assumes that the bearings
+        behave as fixed-fixed end conditions (which is technically inaccurate for the)
+        overhanging case.
+
+        Args:
+            x (float | int): The position at which the deflection is desired
+            axis (str): 
+
+        Returns:
+            tuple: The deflection in the y- and z-axes
+        """        
+
+    def get_torsion_angle_at(self, x: float) -> float:
+        """
+        Calculates the torsional windup (phase angle) in radians over the section 
+        of the shaft where torque is applied.
+
+        Returns:
+            float: The torsion angle 
+        """
+
+        start, end, torque_mag = self.torque
+        if torque_mag == 0:
+            return 0.0
+
+        positions = sorted(self.diameter.keys())
+        theta = 0.0
+
+        for i in range(len(positions)):
+            if positions[i] < start or positions[i] > end:
+                return 0.0
+            current_pos = positions[i]
+            next_pos = min(end, positions[i+1])
+
+            if x < next_pos:
+                L_section = next_pos - current_pos
+                d = self.diameter[current_pos]
+                
+                # Polar moment of inertia for a solid circular shaft (mm^4)
+                J = (pi * d **4) / 32
+                
+                # theta = (T * L) / (J * G)
+                theta += (torque_mag * L_section) / (J * self.G * 1000)
+
+        return theta
     
     def get_area_moment_at(self, x: float) -> float:
         d = self.get_diameter_at(x)
@@ -640,23 +635,23 @@ class Shaft:
         fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(10, 12), sharex=True)
         
         # Plot 1: Resultant Bending Moment Diagram
-        ax1.plot(x_vals, M_res_vals, color='red', linewidth=2)
-        ax1.fill_between(x_vals, M_res_vals, 0, color='red', alpha=0.2)
+        ax1.plot(x_vals, M_res_vals, color="seagreen", linewidth=2)
+        ax1.fill_between(x_vals, M_res_vals, 0, color="seagreen", alpha=0.2)
         ax1.set_ylabel('Resultant Moment M (N mm)')
         ax1.set_title('Resultant Bending Moment Diagram')
         ax1.grid(True, linestyle='--', alpha=0.7)
         
         # Plot 2: Component Stresses (Bending & Torsion)
-        ax2.plot(x_vals, sigma_b_vals, color='orange', linewidth=2, label='Bending Stress (MPa)')
-        ax2.plot(x_vals, tau_t_vals, color='green', linewidth=2, label='Torsional Stress (MPa)')
+        ax2.plot(x_vals, sigma_b_vals, linewidth=2, color="seagreen", label='Bending Stress (MPa)')
+        ax2.plot(x_vals, tau_t_vals, linewidth=2, color="#76cd26", label='Torsional Stress (MPa)')
         ax2.set_ylabel('Component Stress (MPa)')
         ax2.set_title('Bending & Torsional Stresses (Shows Geometry Steps)')
         ax2.legend()
         ax2.grid(True, linestyle='--', alpha=0.7)
         
         # Plot 3: Max Stress Diagram
-        ax3.plot(x_vals, sigma_max_vals, color='purple', linewidth=2)
-        ax3.fill_between(x_vals, sigma_max_vals, 0, color='purple', alpha=0.2)
+        ax3.plot(x_vals, sigma_max_vals, color="steelblue", linewidth=2)
+        ax3.fill_between(x_vals, sigma_max_vals, 0, color="steelblue", alpha=0.2)
         
         # Annotation for Maximum Stress
         ax3.plot(critical_x, max_sigma, 'ko') # Black dot at peak
@@ -745,19 +740,8 @@ class Shaft:
 
         CURRENTLY INCORRECT
         """        
-        kf, kfs, kfm, kfsm = 0, 0, 0, 0
-        diam = list()
-        if len(self._stress_factors) == 0:
-            kf, kfs, kfm, kfsm = 1, 1, 1, 1
-
-        else:
-            factors = self._stress_factors.values()
-            kf = max([i["kf"] for i in factors])
-            kfs = max([i["kfs"] for i in factors])
-            kfm = max([i["kfm"] for i in factors])
-            kfsm = max([i["kfsm"] for i in factors])
-        d = (32 * safety_factor / pi * (np.sqrt((kf * M_a) ** 2 + 3 / 4 * (kfs * T_a) ** 2) / Sf + \
-                                np.sqrt((kfm * M_m) ** 2 + 3 / 4 * (kfsm * T_m) ** 2) / Sut)) ** (1/3)        
+        d = (32 * safety_factor / pi * (np.sqrt(M_a ** 2 + 3 / 4 * T_a ** 2) / Sf + \
+                                np.sqrt(M_m ** 2 + 3 / 4 * T_m ** 2) / Sut)) ** (1/3)        
         return d
 
     def min_diameter(self, torque: float, bending_moment: float, tension: float, safety_factor: float =2.5):
@@ -775,11 +759,11 @@ class Shaft:
         
         dimensions = {"diameter" : min(self.diameter.values())}
         Sf = FatigueStrengthCalculator.calc_corrected_fatigue_strength(
-            self.Sut, "steel", "shaft", dimensions, "cold-rolled", "bending", 50, 25)
+            self.Sut, "steel", "shaft", dimensions, "cold-rolled", "bending", 99, 25)
         d = self.min_diameter_equation(safety_factor,0,torque,bending_moment,tension,Sf,self.Sut)
         dimensions["diameter"] = d
         Sf = FatigueStrengthCalculator.calc_corrected_fatigue_strength(
-            self.Sut, "steel", "shaft", dimensions, "cold-rolled", "bending", 50, 25)
+            self.Sut, "steel", "shaft", dimensions, "cold-rolled", "bending", 99, 25)
         d = self.min_diameter_equation(safety_factor,0,torque,bending_moment,tension,Sf,self.Sut) # Too lazy to code a while loop right now
         return d
 
@@ -810,7 +794,7 @@ class Shaft:
         return Nf
     
     def get_distributed_loads(self):
-        """Defines distributed loads affecting the shaft
+        """Defines distributed loads affecting the shaft in the vertical direction.
 
         Returns:
             num: a list of distributed loads in tuple form, stored as
@@ -946,47 +930,11 @@ class Shaft:
 
         dimensions = {"diameter": self.get_diameter_at(x_pos)}
         Sf = FatigueStrengthCalculator.calc_corrected_fatigue_strength(
-            self.Sut, "steel", "shaft", dimensions, "cold-rolled", "bending", 50, 25)
+            self.Sut, "steel", "shaft", dimensions, "cold-rolled", "bending", 99, 25)
         
         Nf = self.safety_factor(Sf, self.Sut, axial_stress, torsion, 1, 1, 1)
         
         return Nf
-    
-    def get_phase_angle_at(self, x: float) -> float:
-        """
-        Calculates the torsional windup (phase angle) in radians at a specific 
-        axial position 'x', relative to the start of the torque application.
-        """
-        start, end, torque_mag = self.torque
-        
-        # If no torque, or if we are looking at a point before the torque starts
-        if torque_mag == 0 or x <= start:
-            return 0.0
-
-        # We only calculate twist up to point x, or the end of the torque span (whichever comes first)
-        effective_end = min(x, end)
-        
-        positions = sorted(self.diameter.keys())
-        theta = 0.0
-
-        for i in range(len(positions)):
-            current_pos = positions[i]
-            next_pos = positions[i+1] if i + 1 < len(positions) else self.length
-
-            # Determine the overlap between this constant-diameter section and our effective span
-            overlap_start = max(start, current_pos)
-            overlap_end = min(effective_end, next_pos)
-
-            if overlap_start < overlap_end:
-                L_section = overlap_end - overlap_start
-                d = self.diameter[current_pos]
-                
-                J = (self.pi * d**4) / 32
-                G_MPa = self.G * 1000 
-                
-                theta += (torque_mag * L_section) / (J * G_MPa)
-
-        return theta
 
     def check_torsional_deflection_limits(self, max_allowed_degrees: float, num_points: int = 1000) -> bool:
         """
@@ -996,7 +944,7 @@ class Shaft:
         x_vals = np.linspace(0, self.length, num_points)
         
         for x in x_vals:
-            twist_rad = self.get_phase_angle_at(x)
+            twist_rad = self.get_torsion_angle_at(x)
             twist_deg = np.rad2deg(twist_rad)
             
             # Use absolute values to handle negative torque directions
