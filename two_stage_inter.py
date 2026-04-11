@@ -3,7 +3,7 @@ from Bearing import *
 
 # counterclockwise motion
 diameter_inter = {
-    0: 20,
+    0: 15,
     15 : 25,
     20: 36,
     54: 40,
@@ -17,14 +17,13 @@ diameter_inter = {
 inter_shaft = Shaft(191, diameter_inter)
 inter_shaft.add_keyseat(40.5)
 inter_shaft.add_keyseat(137)
+inter_shaft.add_stress_concentration(15, 2)
 inter_shaft.add_stress_concentration(20, 2)
 inter_shaft.add_stress_concentration(54, 2)
 inter_shaft.add_stress_concentration(57, 2)
 inter_shaft.add_stress_concentration(107, 2)
 inter_shaft.add_stress_concentration(110, 2)
 inter_shaft.add_stress_concentration(171, 2)
-
-print(inter_shaft.stress_factors)
 
 shaft_torque = 367000
 inter_shaft.mass = 0.944
@@ -53,8 +52,8 @@ inter_shaft.point_load_balance(bearing_1_pos,
 
 print(inter_shaft.torque)
 print("safety factor is " + str(inter_shaft.get_min_safety_factor()))
-
-inter_shaft.plot_maximum_stress_diagrams(True)
+print(inter_shaft.point_loads_y)
+print(inter_shaft.point_loads_z)
 
 
 bearing_1_y, bearing_2_y = inter_shaft.point_loads_y[0:2]
@@ -63,9 +62,8 @@ bearing_1_x, bearing_2_x = inter_shaft.point_loads_z[0:2]
 bearing_1 = Bearing("ball", 90, 0, bearing_1_x[1], bearing_1_y[1], 10)
 bearing_2 = Bearing("ball", 90, 0, bearing_2_x[1], bearing_2_y[1], 10)
 
-'''print(bearing_1.F_r)
+print(bearing_1.F_r)
 print(bearing_1_x)
 print(bearing_1_y)
-bearing_1.minimum_basic_load()
-bearing_2.minimum_basic_load()
-'''
+# bearing_1.minimum_basic_load() # Use 6302 due to geometric limitation on shaft diameter for safety
+bearing_2.minimum_basic_load() # 6304 from force reqs: bore is sufficient; perhaps leave space if desired

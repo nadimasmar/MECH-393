@@ -6,12 +6,14 @@ from Bearing import *
 # torquing downward on the gear. 
 
 diameter_input = {
-    0 : 15, 
-    10 : 30,
+    0 : 30,
     144 : 32,
     147 : 30,
-    157 : 15
+    157 : 17
 }
+
+# While the bearing on the inside of the casing is 14 mm wide, I left 1 mm for spacing purposes
+# to prevent grinding on any walls.
 
 input_shaft = Shaft(167, diameter_input)
 input_shaft.add_keyseat(123)
@@ -48,3 +50,15 @@ print(input_shaft.point_loads_z)
 
 Nf = input_shaft.get_min_safety_factor()
 print("safety factor is " + str(Nf))
+
+bearing_1_y, bearing_2_y = input_shaft.point_loads_y[0:2]
+bearing_1_x, bearing_2_x = input_shaft.point_loads_z[0:2]
+
+bearing_1 = Bearing("ball", 90, 0, bearing_1_x[1], bearing_1_y[1], 10)
+bearing_2 = Bearing("ball", 90, 0, bearing_2_x[1], bearing_2_y[1], 10)
+
+print(bearing_1.F_r)
+print(bearing_1_x)
+print(bearing_1_y)
+# bearing_1.minimum_basic_load() # 6306 by shaft size
+bearing_2.minimum_basic_load() # 6303 by force measurement ==> reduce diameter to 17 mm

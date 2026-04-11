@@ -5,7 +5,7 @@ diameter_out = {
     0: 20,
     15: 30,
     25: 50,
-    30: 39,
+    30: 40, # changed this for the bearing, you could make a small lip for it if you want
     157: 20
 }
 
@@ -42,4 +42,15 @@ output_shaft.point_load_balance(bearing_1_pos,
                                shaft_torque)
 
 print("safety factor is " + str(output_shaft.get_min_safety_factor()))
-output_shaft.plot_maximum_stress_diagrams(True)
+
+bearing_1_y, bearing_2_y = output_shaft.point_loads_y[0:2]
+bearing_1_x, bearing_2_x = output_shaft.point_loads_z[0:2]
+
+bearing_1 = Bearing("ball", 90, 0, bearing_1_x[1], bearing_1_y[1], 10)
+bearing_2 = Bearing("ball", 90, 0, bearing_2_x[1], bearing_2_y[1], 10)
+
+print(bearing_1.F_r)
+print(bearing_1_x)
+print(bearing_1_y)
+# bearing_1.minimum_basic_load() # 6304 by load requirement: bore is met
+bearing_2.minimum_basic_load() # 6308 by load requirement
