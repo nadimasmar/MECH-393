@@ -55,14 +55,14 @@ class Key:
     @staticmethod
     def stress_concentration_factor():
         """This static method calculates the stress concentration factors for end-milled keyseats in shafts
-        under either bending or torsional loading. We assume assume radius to shaft diameter ratio of 0.021,
+        under either bending or torsional loading. We assume assume radius to shaft diameter ratio of 0.06,
         as specified in ANSI standards. We also assume that the key is in place and transmitting torque.
 
         Returns:
             tuple: Pair of tensile and torsional stress concentration factors, respectively.
         """
-        k_t = 2.2
-        k_ts = 3.0
+        k_t = 1.7
+        k_ts = 2.5
         return (k_t, k_ts)
 
     @staticmethod

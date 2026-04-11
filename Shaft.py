@@ -286,7 +286,7 @@ class Shaft:
         factors["kf"] = 1 + q * (ktb - 1)
         factors["kfs"] = 1 + q * (kts - 1)
 
-        bending, torsion, max_stress = self.calculate_maximum_stress_at(axial_pos)[1:4]
+        bending, torsion, max_stress = self.calculate_nominal_stress_at(axial_pos)[1:4]
 
         kf = factors["kf"]
         kfs = factors["kfs"]
@@ -1074,10 +1074,12 @@ class Shaft:
         
         # Step one: determine safety factor at maximum bending force
 
-        axial_stress = max(bending_stress_mesh)
-        j = bending_stress_mesh.index(axial_stress)
+        max_stress = [results[x][3] for x in range(num_points)]
+        max_of_max = max(max_stress)
+        j = max_stress.index(max_of_max)
         x_pos = x_axis[j]
         torsion = torsion_mesh[j]
+        axial_stress = bending_stress_mesh[j]
 
         dimensions = {"diameter": self.get_diameter_at(x_pos)}
         Sf = FatigueStrengthCalculator.calc_corrected_fatigue_strength(
