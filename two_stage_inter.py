@@ -1,23 +1,19 @@
 from Shaft import *
-import matplotlib as mpl
-
-'''
-cmap = mpl.colormaps.get_cmap("YlGnBu")
-mpl.rcParams['cmap'] = cmap'''
+from Bearing import *
 
 # counterclockwise motion
 diameter_inter = {
-    0: 20,
-    20: 30,
-    25: 26,
-    27: 30,
-    54: 40,
-    57: 30,
-    107: 40,
-    110: 30,
-    164: 26,
-    166: 30,
-    171: 20
+    0: 30,
+    20: 41,
+    25: 39,
+    27: 41,
+    54: 45,
+    57: 41,
+    107: 45,
+    110: 41,
+    164: 39,
+    166: 41,
+    171: 30
 }
 
 inter_shaft = Shaft(191, diameter_inter)
@@ -59,10 +55,24 @@ inter_shaft.point_load_balance(bearing_1_pos,
                                shaft_torque,
                                shaft_torque)
 
-print(inter_shaft.point_loads_y)
+
 print(inter_shaft.torque)
 print(inter_shaft.get_min_safety_factor())
 print(inter_shaft.min_diameter(inter_shaft.torque[2], 230, 0))
 
 defl = inter_shaft.get_deflection_at(73)
 print(inter_shaft.get_torsion_angle_at(124))
+'''inter_shaft.plot_shear_bending_diagrams("y")
+inter_shaft.plot_deflection_diagrams("y")'''
+
+bearing_1_y, bearing_2_y = inter_shaft.point_loads_y[0:2]
+bearing_1_x, bearing_2_x = inter_shaft.point_loads_z[0:2]
+
+bearing_1 = Bearing("ball", 90, 0, bearing_1_x[1], bearing_1_y[1], 10)
+bearing_2 = Bearing("ball", 90, 0, bearing_2_x[1], bearing_2_y[1], 10)
+
+print(bearing_1.F_r)
+print(bearing_1_x)
+print(bearing_1_y)
+bearing_1.minimum_basic_load()
+bearing_2.minimum_basic_load()

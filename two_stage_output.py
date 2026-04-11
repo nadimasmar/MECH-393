@@ -1,12 +1,12 @@
 from Shaft import *
 
 diameter_out = {
-    0: 30,
-    25: 40,
-    125: 36,
-    127: 40,
-    167: 50,
-    172: 30
+    0: 35,
+    25: 50,
+    125: 48,
+    127: 50,
+    167: 55,
+    172: 50
 }
 
 output_shaft = Shaft(197, diameter_out)

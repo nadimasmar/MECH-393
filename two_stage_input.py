@@ -5,22 +5,21 @@ from Shaft import *
 # torquing downward on the gear. 
 
 diameter_input = {
-    0: 20,
-    15: 30,
-    100 : 26,
-    102 : 30,
-    144: 40,
-    147: 30,
-    152: 20
+    0 : 20,
+    15 : 36,
+    100 : 34,
+    102 : 36,
+    144 : 40,
+    147 : 36,
 }
 
 input_shaft = Shaft(167, diameter_input)
 input_shaft.add_keyseat(123)
 input_shaft.add_keyseat(35)
-input_shaft.add_stress_concentration(100, 0.5)
-input_shaft.add_stress_concentration(102, 0.5)
-input_shaft.add_stress_concentration(144, 2)
-input_shaft.add_stress_concentration(147, 2)
+input_shaft.add_stress_concentration(100, 1)
+input_shaft.add_stress_concentration(102, 1)
+input_shaft.add_stress_concentration(144, 0.5)
+input_shaft.add_stress_concentration(147, 0.5)
 
 input_shaft.mass = 0.41561
 unmounted_gear_pos = 35
@@ -44,11 +43,10 @@ input_shaft.point_load_balance(bearing_1_pos,
                                input_torque,
                                )
 
+input_shaft.torque = (unmounted_gear_pos, input_gear_pos, input_torque)
+input_shaft.plot_maximum_stress_diagrams(True)
 print(input_shaft.point_loads_y)
 print(input_shaft.point_loads_z)
 
-input_shaft.torque = (unmounted_gear_pos, input_gear_pos, input_torque)
 Nf = input_shaft.get_min_safety_factor()
 print(Nf)
-d = input_shaft.min_diameter(input_shaft.torque[2],265,0)
-print(d)

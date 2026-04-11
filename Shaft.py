@@ -358,8 +358,113 @@ class Shaft:
                 break
                 
         return current_d
+    
+    def get_fourth_moment_at(self, x: float) -> float:
+        """
+        Gets the fourth moment of area of the shaft about the z (and symmetrically
+        the y) axis.
 
-    def get_deflection_at(self, x: float | int) -> tuple[float, float]:
+        Args:
+            x (float): Position along the shaft at which to evaluate.
+
+        Returns:
+            float: The fourth moment of area of the shaft at the specified point.
+        """        
+        d = self.get_diameter_at(x)
+        I_zz = pi * d ** 4 / 64
+        return I_zz
+    
+    def get_deflection_mesh(self, res=10001) -> tuple[float, float]:
+        """_summary_
+
+        Args:
+            res (int, optional): _description_. Defaults to 10001.
+
+        Raises:
+            ValueError: Exits the loop if there are no forces on the shaft yet.
+
+        Returns:
+            tuple[float, float]: _description_
+        """            
+        
+        if len(self.point_loads_y) == 0  or len(self.point_loads_z) == 0:
+            raise ValueError("The force balance on the beam has not been computed yet.")
+        
+        x_mesh = np.linspace(0, self.length, res)
+        sect_len = x_mesh[1] - x_mesh[0]
+        
+        d_mesh = [self.get_diameter_at(x) for x in x_mesh]
+        
+        # rigidity at each point
+
+        EI_mesh = [self.E * 1000 * self.get_fourth_moment_at(x) for x in x_mesh] # N mm^2
+        
+        M_y = self._get_moment_mesh("y", res) # N mm
+        M_z = self._get_moment_mesh("z", res) # N mm
+
+        MEI_quotient_y = M_y / EI_mesh 
+        MEI_quotient_z = M_z / EI_mesh
+
+        # relative slope
+
+        theta = 0
+        av_slope_y = list()
+        for i in range(res):
+            del_theta = MEI_quotient_y[i] * sect_len
+            av_theta = theta + del_theta / 2
+            theta += del_theta
+            av_slope_y.append(av_theta)
+        
+        theta = 0
+        av_slope_z = list()
+        for i in range(res):
+            del_theta = MEI_quotient_z[i] * sect_len
+            av_theta = theta + del_theta / 2
+            theta += del_theta
+            av_slope_z.append(av_theta)
+
+        delta_av_y = np.array(av_slope_y) * sect_len
+        delta_av_z = np.array(av_slope_z) * sect_len
+
+        # Locate bearings for zero value
+
+        bearing_pos_1 = self.point_loads_y[0][0]
+        bearing_pos_2 = self.point_loads_y[1][0]
+
+        index_1 = np.abs(x_mesh - bearing_pos_1).argmin()
+        index_2 = np.abs(x_mesh - bearing_pos_2).argmin()
+
+        # Determine integration constant
+        K_y = - sum(delta_av_y[index_1:index_2+1]) / (sect_len * (index_2 + 1 - index_1))
+        K_z = - sum(delta_av_z[index_1:index_2+1]) / (sect_len * (index_2 + 1 - index_1))
+
+        K_y_mesh = np.array([K_y * sect_len] * res)
+        K_z_mesh = np.array([K_z * sect_len] * res)
+
+        # Gettin the real deflection
+
+        inc_defl_y = K_y_mesh + delta_av_y
+        inc_defl_z = K_z_mesh + delta_av_z
+
+        deflection_y = list()
+        for i in range(res):
+            if i == 0:
+                deflection_y.append(inc_defl_y[i])
+                continue
+            total_def = deflection_y[i-1] + inc_defl_y[i]
+            deflection_y.append(total_def)
+        
+        deflection_z = list()
+        for i in range(res):
+            if i == 0:
+                deflection_z.append(inc_defl_z[i])
+                continue
+            total_def = deflection_z[i-1] + inc_defl_z[i]
+            deflection_z.append(total_def)
+
+        return deflection_y, deflection_z
+
+    def get_deflection_at(self, x: float | int, res=10001) -> tuple[float, float]:
         """Returns the deflection on the shaft at any position. Assumes that the bearings
         behave as fixed-fixed end conditions (which is technically inaccurate for the)
         overhanging case.
@@ -370,39 +475,50 @@ class Shaft:
 
         Returns:
             tuple: The deflection in the y- and z-axes
-        """        
+        """
+        
+
 
     def get_torsion_angle_at(self, x: float) -> float:
         """
-        Calculates the torsional windup (phase angle) in radians over the section 
-        of the shaft where torque is applied.
+        Calculates the torsional windup (twist angle) in radians at a specific 
+        axial position 'x', relative to the start of the torque application.
+
+        Args:
+            x (float): The axial position at which the twist angle is desired.
 
         Returns:
-            float: The torsion angle 
+            float: The twist of the shaft at the point relative to the beginning of the shaft.
+                
         """
-
         start, end, torque_mag = self.torque
-        if torque_mag == 0:
+        
+        # If no torque, or if we are looking at a point before the torque starts
+        if torque_mag == 0 or x <= start:
             return 0.0
 
+        # We only calculate twist up to point x, or the end of the torque span (whichever comes first)
+        effective_end = min(x, end)
+        
         positions = sorted(self.diameter.keys())
         theta = 0.0
 
         for i in range(len(positions)):
-            if positions[i] < start or positions[i] > end:
-                return 0.0
             current_pos = positions[i]
-            next_pos = min(end, positions[i+1])
+            next_pos = positions[i+1] if i + 1 < len(positions) else self.length
 
-            if x < next_pos:
-                L_section = next_pos - current_pos
+            # Determine the overlap between this constant-diameter section and our effective span
+            overlap_start = max(start, current_pos)
+            overlap_end = min(effective_end, next_pos)
+
+            if overlap_start < overlap_end:
+                L_section = overlap_end - overlap_start
                 d = self.diameter[current_pos]
                 
-                # Polar moment of inertia for a solid circular shaft (mm^4)
-                J = (pi * d **4) / 32
+                J = (pi * d**4) / 32
+                G_MPa = self.G * 1000 
                 
-                # theta = (T * L) / (J * G)
-                theta += (torque_mag * L_section) / (J * self.G * 1000)
+                theta += (torque_mag * L_section) / (J * G_MPa)
 
         return theta
     
@@ -416,7 +532,12 @@ class Shaft:
         """
         Calculates the internal shear force at a specific axial position x 
         in both the Y and Z directions.
-        Returns: (shear_y, shear_z)
+
+        Args:
+            x (float): The axial position on the shaft at which the shear is desired.
+
+        Returns: 
+            tuple: (shear_y, shear_z)
         """
         if x < 0 or x > self.length:
             raise ValueError("Position x is outside the shaft boundaries.")
@@ -456,7 +577,9 @@ class Shaft:
         """
         Calculates the internal bending moment at a specific axial position x
         in both the Y and Z directions.
-        Returns: (moment_y, moment_z)
+
+        Returns: 
+            tuple: 2-tuple containing the moments along the y- and z-axis
         """
         if x < 0 or x > self.length:
             raise ValueError("Position x is outside the shaft boundaries.")
@@ -504,7 +627,7 @@ class Shaft:
                 
         return moment_y, moment_z
     
-    def _get_shear_mesh(self, axis, num_points=1000):
+    def _get_shear_mesh(self, axis, num_points=1001):
         x_vals = np.linspace(0, self.length, num_points) 
         shear = 0   
         if axis == "y":
@@ -513,7 +636,16 @@ class Shaft:
             shear = np.array([self.get_shear_at(x)[1] for x in x_vals])
         return shear
 
-    def _get_moment_mesh(self, axis, num_points=1000):
+    def _get_moment_mesh(self, axis: str, num_points=1001) -> np.ndarray:
+        """Generates a mesh of moments at increments along the shaft axis
+
+        Args:
+            axis (str): The desired Cartesian axis (y or z) along which to mesh.
+            num_points (int, optional): The number of points to discretize. Defaults to 1000.
+
+        Returns:
+            np.ndarray: A numpy array of the moments.
+        """        
         x_vals = np.linspace(0, self.length, num_points)
         moment = 0
         if axis == "y":
@@ -596,7 +728,7 @@ class Shaft:
             
         return m_res, sigma_x, tau, sigma_max # Nmm, rest in MPa
 
-    def plot_maximum_stress_diagrams(self, maximum: bool, num_points: float | int =1001, failure_theory: str ="von_mises"):
+    def plot_maximum_stress_diagrams(self, maximum: bool, num_points: float | int =10001, failure_theory: str ="von_mises"):
         """
         Generates and displays the Resultant Bending Moment, Component Stresses, 
         and Max Stress diagrams for the shaft.
@@ -715,6 +847,26 @@ class Shaft:
         plt.tight_layout()
         plt.show()
 
+    def plot_deflection_diagrams(self, axis: str, num_points: int = 10001):
+        x_vals = np.linspace(0, self.length, num_points)
+        delta_mesh = 0
+        if axis == "y":
+            delta_mesh = self.get_deflection_mesh()[0]
+        elif axis == "z":
+            delta_mesh = self.get_deflection_mesh()[1]
+        
+        fig, ax = plt.subplots()
+        
+        ax.plot(x_vals, delta_mesh, color='blue', linewidth=2)
+        ax.fill_between(x_vals, delta_mesh, 0, color='blue', alpha=0.2)
+        ax.axhline(0, color='black', linewidth=1)
+        ax.set_xlabel('Bearing Centre Distance (mm)')
+        ax.set_ylabel('Deflection (mm)')
+        ax.set_title('Deflection of Shaft in the ' + axis + "-direction")
+        ax.grid(True, linestyle='--', alpha=0.7)
+
+        plt.show()
+
     def min_diameter_equation(self, 
                               safety_factor: float, 
                               T_a: float, 
@@ -790,7 +942,7 @@ class Shaft:
         alternating_stress = baseStressCalculator.von_mises_equivalent(*alt_stress)
         mean_stress = baseStressCalculator.von_mises_equivalent(*mean_stress)
 
-        Nf = GoodmanSafetyFactorCalculator.calc_safety_factor_case_2(Sf,Sut,alternating_stress,mean_stress)
+        Nf = GoodmanSafetyFactorCalculator.calc_safety_factor_case_3(Sf,Sut,alternating_stress,mean_stress)
         return Nf
     
     def get_distributed_loads(self):
@@ -885,13 +1037,12 @@ class Shaft:
         R2x = - resultant_force
         R1x = - (radial_force1 + radial_force2 + R2x)
 
-        point_forces_y = [R2y, R1y, G_W1 + tangent_force_1, G_W2 + tangent_force_2]
-        point_forces_z = [R2x, R1x, radial_force1, radial_force2]
-        positions_y = [bearing_pos2, bearing_pos1, gear_pos1, gear_pos2]
-        positions_z = [bearing_pos2, bearing_pos1, gear_pos1, gear_pos2]
+        point_forces_y = [R1y, R2y, G_W1 + tangent_force_1, G_W2 + tangent_force_2]
+        point_forces_z = [R1x, R2x, radial_force1, radial_force2]
+        positions = [bearing_pos1, bearing_pos2, gear_pos1, gear_pos2]
 
-        results_y = list(zip(positions_y, point_forces_y))
-        results_z = list(zip(positions_z, point_forces_z))
+        results_y = list(zip(positions, point_forces_y))
+        results_z = list(zip(positions, point_forces_z))
         self.point_loads_y, self.point_loads_z = results_y, results_z
         
     def get_min_safety_factor(self):
@@ -914,10 +1065,10 @@ class Shaft:
                 return None
         
         num_points = 10000 # hard coded by preference
+        tol = self.length / num_points
         x_axis = np.linspace(0, self.length, num_points)
-        # shear_mesh = self._get_shear_mesh("horizontal", num_points)
 
-        results = [self.calculate_maximum_stress_at(x) for x in x_axis]
+        results = [self.calculate_maximum_stress_at(x, tolerance=tol) for x in x_axis]
         bending_stress_mesh = [results[x][1] for x in range(num_points)]
         torsion_mesh =  [results[x][2] for x in range(num_points)]
         
