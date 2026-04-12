@@ -7,7 +7,7 @@ from Bearing import *
 
 diameter_input = {
     0 : 30,
-    144 : 32,
+    144 : 35,
     147 : 30,
     157 : 17
 }
@@ -20,7 +20,9 @@ input_shaft.add_keyseat(123)
 input_shaft.add_keyseat(35)
 input_shaft.add_stress_concentration(144, 2)
 input_shaft.add_stress_concentration(147, 2)
+input_shaft.add_stress_concentration(157, 1)
 
+print(input_shaft.mass)
 input_shaft.mass = 0.41561
 unmounted_gear_pos = 35
 input_gear_pos = 123
@@ -34,7 +36,7 @@ input_shaft.point_load_balance(bearing_1_pos,
                                bearing_2_pos,
                                unmounted_gear_pos,
                                input_gear_pos,
-                               input_gear_mass,
+                               2 * input_gear_mass,
                                input_gear_mass,
                                input_gear_pitch_d,
                                128,
@@ -50,6 +52,7 @@ print(input_shaft.point_loads_z)
 
 Nf = input_shaft.get_min_safety_factor()
 print("safety factor is " + str(Nf))
+'''input_shaft.plot_maximum_stress_diagrams(True)'''
 
 bearing_1_y, bearing_2_y = input_shaft.point_loads_y[0:2]
 bearing_1_x, bearing_2_x = input_shaft.point_loads_z[0:2]
@@ -60,5 +63,8 @@ bearing_2 = Bearing("ball", 90, 0, bearing_2_x[1], bearing_2_y[1], 10)
 print(bearing_1.F_r)
 print(bearing_1_x)
 print(bearing_1_y)
-# bearing_1.minimum_basic_load() # 6306 by shaft size
-bearing_2.minimum_basic_load() # 6303 by force measurement ==> reduce diameter to 17 mm
+print(bearing_1.C) # 6306 by shaft size
+print(bearing_2.C) # 6303 by force measurement ==> reduce diameter to 17 mm
+
+print(bearing_1.get_LD_bearing(16910))
+print(bearing_2.get_LD_bearing(10324))

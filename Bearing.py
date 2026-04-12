@@ -112,4 +112,7 @@ class Bearing:
         string = f"The bearing must be rated for {base_load} N of force over one million cycles, while the limit on static loading is {C0}"
         print(string)
         return base_load
+    
+    def get_LD_bearing(self, dyn_load_rate):
+        return self.K_r * (dyn_load_rate / self.F_r) ** 3
 

@@ -12,17 +12,17 @@ diameter_out = {
 output_shaft = Shaft(172, diameter_out)
 output_shaft.add_keyseat(30)
 output_shaft.add_keyseat(121)
+output_shaft.add_stress_concentration(15, 3)
 output_shaft.add_stress_concentration(25, 5)
 output_shaft.add_stress_concentration(30, 2)
-output_shaft.add_stress_concentration(15, 3)
 output_shaft.add_stress_concentration(157, 3)
 
 shaft_torque = -856300
 output_shaft.mass = 1.727
 gear_1_mass = 7.66
-gear_2_mass = 2 # arbitrary
+gear_2_mass = 8 # arbitrary
 gear_1_diameter = 224
-gear_2_diameter = 100
+gear_2_diameter = 128
 gear_1_pos = 30
 gear_2_pos = 121
 output_shaft.torque = (gear_1_pos, gear_2_pos, shaft_torque)
@@ -50,7 +50,9 @@ bearing_1 = Bearing("ball", 90, 0, bearing_1_x[1], bearing_1_y[1], 10)
 bearing_2 = Bearing("ball", 90, 0, bearing_2_x[1], bearing_2_y[1], 10)
 
 print(bearing_1.F_r)
-print(bearing_1_x)
-print(bearing_1_y)
+print(bearing_2.F_r)
 # bearing_1.minimum_basic_load() # 6304 by load requirement: bore is met
-bearing_2.minimum_basic_load() # 6308 by load requirement
+# bearing_2.minimum_basic_load() # 6308 by shaft requirement
+
+print(bearing_1.get_LD_bearing(13350))
+print(bearing_1.get_LD_bearing(32708))
