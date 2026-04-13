@@ -435,8 +435,11 @@ class Shaft:
         index_2 = np.abs(x_mesh - bearing_pos_2).argmin()
 
         # Determine integration constant
-        K_y = - sum(delta_av_y[index_1:index_2+1]) / (sect_len * (index_2 + 1 - index_1))
-        K_z = - sum(delta_av_z[index_1:index_2+1]) / (sect_len * (index_2 + 1 - index_1))
+        bearing_dist = sect_len * (index_2 + 1 - index_1)
+        intermediate_calc_y = delta_av_y[index_1:index_2+1]
+        intermediate_calc_z = delta_av_z[index_1:index_2+1]
+        K_y = - sum(intermediate_calc_y) / bearing_dist
+        K_z = - sum(intermediate_calc_z) / bearing_dist
 
         K_y_mesh = np.array([K_y * sect_len] * res)
         K_z_mesh = np.array([K_z * sect_len] * res)
@@ -792,7 +795,7 @@ class Shaft:
                      xytext=(critical_x + (self.length*0.05), max_sigma * 0.9),
                      arrowprops=dict(facecolor='black', shrink=0.05, width=1.5, headwidth=6))
                      
-        ax3.set_xlabel('Position x')
+        ax3.set_xlabel('Position x (mm)')
         
         # Dynamic labels based on theory
         if failure_theory == "von_mises":
@@ -836,11 +839,11 @@ class Shaft:
         ax1.grid(True, linestyle='--', alpha=0.7)
         
         # 5. Plot Bending Moment Diagram (BMD)
-        ax2.plot(x_vals, M_vals, color='seagreen', linewidth=2)
-        ax2.fill_between(x_vals, M_vals, 0, color='seagreen', alpha=0.2)
+        ax2.plot(x_vals, M_vals / 1000, color='seagreen', linewidth=2)
+        ax2.fill_between(x_vals, M_vals / 1000, 0, color='seagreen', alpha=0.2)
         ax2.axhline(0, color='black', linewidth=1)
-        ax2.set_xlabel('Position x')
-        ax2.set_ylabel('Bending Moment M (N mm)')
+        ax2.set_xlabel('Position x (mm)')
+        ax2.set_ylabel('Bending Moment M (N m)')
         ax2.set_title('Bending Moment Diagram')
         ax2.grid(True, linestyle='--', alpha=0.7)
         
@@ -857,15 +860,35 @@ class Shaft:
         
         fig, ax = plt.subplots()
         
-        ax.plot(x_vals, delta_mesh, color='blue', linewidth=2)
-        ax.fill_between(x_vals, delta_mesh, 0, color='blue', alpha=0.2)
+        ax.plot(x_vals, delta_mesh, color='steelblue', linewidth=2)
+        ax.fill_between(x_vals, delta_mesh, 0, color='steelblue', alpha=0.2)
         ax.axhline(0, color='black', linewidth=1)
-        ax.set_xlabel('Bearing Centre Distance (mm)')
+        ax.set_xlabel('Position x (mm)')
         ax.set_ylabel('Deflection (mm)')
         ax.set_title('Deflection of Shaft in the ' + axis + "-direction")
         ax.grid(True, linestyle='--', alpha=0.7)
 
         plt.show()
+
+    def plot_deflection_diagrams_m(self, axis: str, num_points: int = 10001):
+            x_vals = np.linspace(0, self.length, num_points)
+            delta_mesh = 0
+            if axis == "y":
+                delta_mesh = self.get_deflection_mesh()[0]
+            elif axis == "z":
+                delta_mesh = self.get_deflection_mesh()[1]
+            
+            fig, ax = plt.subplots()
+            
+            ax.plot(x_vals, np.array(delta_mesh) +0.0144, color='steelblue', linewidth=2)
+            ax.fill_between(x_vals, np.array(delta_mesh) +0.0144, 0, color='steelblue', alpha=0.2)
+            ax.axhline(0, color='black', linewidth=1)
+            ax.set_xlabel('Position x (mm)')
+            ax.set_ylabel('Deflection (mm)')
+            ax.set_title('Deflection of Shaft in the ' + axis + "-direction")
+            ax.grid(True, linestyle='--', alpha=0.7)
+
+            plt.show()
 
     def min_diameter_equation(self, 
                               safety_factor: float, 
@@ -1000,9 +1023,8 @@ class Shaft:
             more precisely. Defaults to None.
 
         Returns:
-            list: list of 3-tuples containing the forces, their positions, and 
-            their axial alignments.
-
+            None
+    
         NEED TO RESOLVE DIRECTION OF VECTORS
         """
 
@@ -1046,7 +1068,7 @@ class Shaft:
         self.point_loads_y, self.point_loads_z = results_y, results_z
         
     def get_min_safety_factor(self):
-        """This is the culmination of everything. This function will return the smallest safety factor when checked at multiple critical points.
+        """This function will return the smallest safety factor when checked at multiple critical points.
         The critical points that are checked are at the stress concentrations and the locations of highest bending.
 
         Raises:
@@ -1090,6 +1112,14 @@ class Shaft:
         return Nf
     
     def get_static_safety_factor(self):
+        """Determines the safety factor of the shaft if it is locked and not rotating.
+
+        Raises:
+            ValueError: Exits code if there are no forces to determine the stress with.
+
+        Returns:
+            num: The static safety factor on the shaft.
+        """        
 
         if len(self.point_loads_y) == 0:
             raise ValueError("The force balance on the shaft has not yet been completed. Please use the point_load_balance function.")
@@ -1143,3 +1173,28 @@ class Shaft:
                 
         print(f"PASSED: All positions are within the {max_allowed_degrees}° torsional deflection limit.")
         return True
+
+    def torque_diagram(self):
+        """Generates a torque diagram for the shaft, assuming there are only two torquing elements.
+        """        
+        start, end, mag = self.torque
+        mag = abs(mag / 1000)
+        x_mesh = np.linspace(0, self.length, 1001)
+        T_mesh = np.zeros_like(x_mesh)
+        for index, pos in enumerate(x_mesh):
+            if start <= pos <= end:
+                T_mesh[index] = mag
+            else:
+                T_mesh[index] = 0
+
+        fig, ax = plt.subplots()
+        
+        ax.plot(x_mesh, T_mesh, color='seagreen', linewidth=2)
+        ax.fill_between(x_mesh, np.array(T_mesh), 0, color='seagreen', alpha=0.2)
+        ax.axhline(0, color='black', linewidth=1)
+        ax.set_xlabel('Position x (mm)')
+        ax.set_ylabel('Torque (N m)')
+        ax.set_title("Torque diagram of shaft")
+        ax.grid(True, linestyle='--', alpha=0.7)
+
+        plt.show()

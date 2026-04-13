@@ -56,27 +56,6 @@ inter_shaft.point_load_balance(bearing_1_pos,
                                shaft_torque,
                                shaft_torque)
 
-
-print(inter_shaft.torque)
-print("safety factor is " + str(inter_shaft.get_min_safety_factor()))
+print("fatigue safety factor is " + str(inter_shaft.get_min_safety_factor()))
 Ns = inter_shaft.get_static_safety_factor()
 print("static safety factor is " + str(Ns))
-
-print(inter_shaft.point_loads_y)
-print(inter_shaft.point_loads_z)
-inter_shaft.plot_shear_bending_diagrams("y")
-
-bearing_1_y, bearing_2_y = inter_shaft.point_loads_y[0:2]
-bearing_1_x, bearing_2_x = inter_shaft.point_loads_z[0:2]
-
-bearing_1 = Bearing("ball", 90, 0, bearing_1_x[1], bearing_1_y[1], 10)
-bearing_2 = Bearing("ball", 90, 0, bearing_2_x[1], bearing_2_y[1], 10)
-
-print(bearing_1.F_r)
-print(bearing_1_x)
-print(bearing_1_y)
-# bearing_1.minimum_basic_load() # Use 6302 due to geometric limitation on shaft diameter for safety
-# bearing_2.minimum_basic_load() # 6305 from force reqs: bore is sufficient; perhaps leave space if desired
-
-print(bearing_1.get_LD_bearing(8589))
-print(bearing_2.get_LD_bearing(16910))
