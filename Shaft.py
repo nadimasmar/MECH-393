@@ -712,7 +712,7 @@ class Shaft:
         for loc, factors in self._stress_factors.items():
             if abs(x - loc) <= tolerance:
                 kt_bending = max(kt_bending, factors.get("kf", 1.0))
-                kt_torsion = max(kt_torsion, factors.get("kts", 1.0))
+                kt_torsion = max(kt_torsion, factors.get("kfsm", 1.0))
                 
         # 4. Localized Stresses
         sigma_x = sigma_x_nom * kt_bending
@@ -1083,11 +1083,46 @@ class Shaft:
 
         dimensions = {"diameter": self.get_diameter_at(x_pos)}
         Sf = FatigueStrengthCalculator.calc_corrected_fatigue_strength(
-            self.Sut, "steel", "shaft", dimensions, "cold-rolled", "bending", 99, 25)
+            self.Sut, "steel", "shaft", dimensions, "cold-rolled", "bending", 99.9, 25)
         
         Nf = self.safety_factor(Sf, self.Sut, axial_stress, torsion, 1, 1, 1)
         
         return Nf
+    
+    def get_static_safety_factor(self):
+
+        if len(self.point_loads_y) == 0:
+            raise ValueError("The force balance on the shaft has not yet been completed. Please use the point_load_balance function.")
+        if self.torque[2] == 0:
+            choice = input("There is no torque on the shaft currently. Would you like to continue? ")
+            ans = ["yes", "y", "Yes", 1, "YES"]
+            if choice not in ans:
+                return None
+        
+        num_points = 10000 # hard coded by preference
+        tol = self.length / num_points
+        x_axis = np.linspace(0, self.length, num_points)
+
+        results = [self.calculate_maximum_stress_at(x, tolerance=tol) for x in x_axis]
+        bending_stress_mesh = [results[x][1] for x in range(num_points)]
+        torsion_mesh =  [results[x][2] for x in range(num_points)]
+        
+        # Step one: determine safety factor at maximum bending force
+
+        max_stress = [results[x][3] for x in range(num_points)]
+        max_of_max = max(max_stress)
+        j = max_stress.index(max_of_max)
+        x_pos = x_axis[j]
+        
+        # Reevaluate for static behaviour
+
+        results = self.calculate_nominal_stress_at(x_pos)
+        static_axial = self.stress_factors[round(x_pos,1)]["ktx"] * results[1]
+        static_torsion = self.stress_factors[round(x_pos,1)]["kts"] * results [2]
+
+        von_mises = baseStressCalculator.von_mises_equivalent(static_axial, 0, 0, static_torsion, 0, 0)
+
+        return self.Sy / von_mises
 
     def check_torsional_deflection_limits(self, max_allowed_degrees: float, num_points: int = 1000) -> bool:
         """
